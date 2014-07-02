@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 10.00
+# Visual C# Express 2008
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "YieldPrologTutorial", "YieldPrologTutorial.csproj", "{ACD390C7-09EB-4106-978F-26DF9DB2D03B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ACD390C7-09EB-4106-978F-26DF9DB2D03B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ACD390C7-09EB-4106-978F-26DF9DB2D03B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ACD390C7-09EB-4106-978F-26DF9DB2D03B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ACD390C7-09EB-4106-978F-26DF9DB2D03B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

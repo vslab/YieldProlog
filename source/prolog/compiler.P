@@ -1,0 +1,1562 @@
+/*
+ * Copyright (C) 2007-2008, Jeff Thompson
+ * 
+ * All rights reserved.
+ * 
+ * Redistribution and use in source and binary forms, with or without 
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ *     * Redistributions of source code must retain the above copyright 
+ *       notice, this list of conditions and the following disclaimer.
+ *     * Redistributions in binary form must reproduce the above copyright 
+ *       notice, this list of conditions and the following disclaimer in the 
+ *       documentation and/or other materials provided with the distribution.
+ *     * Neither the name of the copyright holder nor the names of its contributors 
+ *       may be used to endorse or promote products derived from this software 
+ *       without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+ * LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+ * A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+ * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+ * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
+:- import('', ['CompilerState.make'/1, 'CompilerState.assertPred'/3, 
+	       'CompilerState.assertModuleForNameArity'/4, 'CompilerState.startFunction'/2,
+	       'CompilerState.setCodeUsesYield'/1, 'CompilerState.codeUsesYield'/1, 
+	       'CompilerState.determinismEquals'/2, 'CompilerState.newVariableNames'/3, 
+	       'CompilerState.getVariableName'/3, 'CompilerState.variableNamesList'/2, 
+	       'CompilerState.gensym'/3, 'CompilerState.isDetNoneOut'/2, 
+	       'CompilerState.isSemidetNoneOut'/2, 'CompilerState.nameArityHasModule'/4,
+	       'Atom.module'/2]).
+
+:- pred('CompilerState.assertPred'(::(univ, in), ::(univ, in), ::(univ, in)) is det).
+:- pred('CompilerState.assertModuleForNameArity'(::(univ, in), ::(univ, in), ::(univ, in), 
+						 ::(univ, in)) is det).
+:- pred('CompilerState.startFunction'(::(univ, in), ::(univ, in)) is det).
+:- pred('CompilerState.newVariableNames'(::(univ, in), ::(univ, in), ::(univ, in)) is det).
+:- pred('CompilerState.incrementCutIfCounter'(::(univ, in)) is det).
+:- pred('CompilerState.setCodeUsesYield'(::(univ, in)) is det).
+:- pred('CompilerState.codeUsesYield'(::(univ, in)) is semidet).
+:- pred('CompilerState.isDetNoneOut'(::(univ, in), ::(univ, in)) is semidet).
+:- pred('CompilerState.isSemidetNoneOut'(::(univ, in), ::(univ, in)) is semidet).
+:- pred('CompilerState.determinismEquals'(::(univ, in), ::(univ, in)) is semidet).
+:- pred('CompilerState.nameArityHasModule'(::(univ, in), ::(univ, in), ::(univ, in), 
+					   ::(univ, in)) is semidet).
+ 
+:- pred(repeatWrite(::(univ, in), ::(univ, in)) is det).
+repeatWrite(_Value, N) :- N == 0, !.
+repeatWrite(Value, N) :- write(Value), NextN is N - 1, repeatWrite(Value, NextN), !.
+
+:- pred(sameVariable(::(univ, in), ::(univ, in)) is semidet).
+sameVariable(Variable1, Variable2) :- var(Variable1), var(Variable2), Variable1 == Variable2.
+
+% arg1 RuleList is a list of f(Rule, VariableNameSuggestions).
+makeFunctionPseudoCode(RuleList, FunctionCode) :-
+  'CompilerState.make'(State),
+  assertYPPred(State),
+  processCompilerDirectives(RuleList, State),
+  
+  (% First, return the preamble code.
+   % Debug: Can we check the RuleList to see if we really need getDeclaringClass?
+   FunctionCode = getDeclaringClass
+   ;  
+   makeFunctionPseudoCode3(RuleList, State, FunctionCode)).
+
+% Set up the modes for standard Prolog predicates.
+:- pred(assertYPPred(::(univ, in)) is det).
+assertYPPred(State) :-
+  'CompilerState.assertPred'(State, nl, det),
+  'CompilerState.assertPred'(State, write(::(univ, in)), det),
+  'CompilerState.assertPred'(State, put_code(::(univ, in)), det),
+  'CompilerState.assertPred'(State, see(::(univ, in)), det),
+  'CompilerState.assertPred'(State, seen, det),
+  'CompilerState.assertPred'(State, tell(::(univ, in)), det),
+  'CompilerState.assertPred'(State, told, det),
+  'CompilerState.assertPred'(State, throw(::(univ, in)), det),
+  'CompilerState.assertPred'(State, abolish(::(univ, in)), det),
+  'CompilerState.assertPred'(State, retractall(::(univ, in)), det),
+  'CompilerState.assertPred'(State, set_prolog_flag(::(univ, in), ::(univ, in)), det),
+
+  'CompilerState.assertPred'(State, var(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, nonvar(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, atom(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, integer(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, float(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, number(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, atomic(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, compound(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, ground(::(univ, in)), semidet),
+  'CompilerState.assertPred'(State, ::(univ, in) == ::(univ, in), semidet),
+  'CompilerState.assertPred'(State, ::(univ, in) \== ::(univ, in), semidet),
+  'CompilerState.assertPred'(State, ::(univ, in) @< ::(univ, in), semidet),
+  'CompilerState.assertPred'(State, ::(univ, in) @=< ::(univ, in), semidet),
+  'CompilerState.assertPred'(State, ::(univ, in) @> ::(univ, in), semidet),
+  'CompilerState.assertPred'(State, ::(univ, in) @>= ::(univ, in), semidet).
+
+% Scan RuleList for terms starting in :- and process them.
+% Also record which are the local predicates.
+:- pred(processCompilerDirectives(::(univ, in), ::(univ, in)) is det).
+processCompilerDirectives([], _State) :- !.
+processCompilerDirectives([f(':-'(pred(Pred is Determinism)), _)|RestRules], State) :-
+  'CompilerState.assertPred'(State, Pred, Determinism),
+  processCompilerDirectives(RestRules, State), !.
+processCompilerDirectives([f(':-'(import(Module, PredicateList)), _)|RestRules], State) :-
+  importPredicateList(State, Module, PredicateList),
+  processCompilerDirectives(RestRules, State), !.
+processCompilerDirectives([f(':-'(_), _)|RestRules], State) :- 
+  % Ignore other directives.
+  processCompilerDirectives(RestRules, State), !.
+processCompilerDirectives([f(':-'(Head, _Body), _)|RestRules], State) :-
+  % Assert the predicate in the local module.
+  functor(Head, Name, Arity),
+  'CompilerState.assertModuleForNameArity'(State, Name, Arity, ''),
+  processCompilerDirectives(RestRules, State), !.
+processCompilerDirectives([f(Fact, _)|RestRules], State) :-
+  % Assume Fact is a predicate without a body.  Assert it in the local module.
+  functor(Fact, Name, Arity),
+  'CompilerState.assertModuleForNameArity'(State, Name, Arity, ''),
+  processCompilerDirectives(RestRules, State), !.
+processCompilerDirectives([_|RestRules], State) :- 
+  processCompilerDirectives(RestRules, State), !.
+
+importPredicateList(_State, _Module, []) :- !.
+importPredicateList(State, Module, [Name/Arity|Rest]) :-
+  'CompilerState.assertModuleForNameArity'(State, Name, Arity, Module),
+  importPredicateList(State, Module, Rest), !.
+importPredicateList(State, Module, [_|Rest]) :-
+  importPredicateList(State, Module, Rest), !.
+
+% arg1 RuleList is a list of f(Rule, VariableNameSuggestions).
+makeFunctionPseudoCode3(RuleList, State, FunctionCode) :-
+  samePredicateRuleList(RuleList, SamePredicateRuleList, RestRules),
+  SamePredicateRuleList \== [],
+  (compileSamePredicateFunction(SamePredicateRuleList, State, FunctionCode)
+   ;  
+   makeFunctionPseudoCode3(RestRules, State, FunctionCode)).
+
+compileSamePredicateFunction(SamePredicateRuleList, State, FunctionCode) :-
+  [f(FirstRule,_)|_] = SamePredicateRuleList,
+  % We already processed compiler directives, so skip them.
+  \+ FirstRule = ':-'(_),
+  ((Head :- _) = FirstRule -> true 
+   ;
+    % Assume rule is a fact like f(a).
+    Head = FirstRule),
+   
+  'CompilerState.startFunction'(State, Head),
+  % Convert SamePredicateRuleList to a Bag of f(ArgAssignments, Calls) for each clause.
+  findall(f(ArgAssignments, Calls),
+	  (member(f(Rule, VariableNameSuggestions), SamePredicateRuleList),
+	   compileBodyWithHeadBindings(Rule, VariableNameSuggestions, State,ArgAssignments,Calls)),
+	   ClauseBag),
+  Head =.. [Name|ArgsList],
+  getFunctionArgNames(ArgsList, 1, FunctionArgNames),
+  % For each in FunctionArgNames, if all clauses assign the same variable name, use it as
+  %   the MergedArgName for the function.
+  findall(MergedArgName, 
+	  (member(ArgName, FunctionArgNames),
+	   (argAssignedAll(ArgName, ClauseBag, MergedArgName) -> true ; MergedArgName = ArgName)), 
+	  MergedArgNames),
+
+  maplist_arg(MergedArgNames, FunctionArgs),
+  maplist_compileClause(ClauseBag, MergedArgNames, BodyCode),
+  ('CompilerState.determinismEquals'(State, detNoneOut) ->
+    ReturnType = 'void' ;
+  ('CompilerState.determinismEquals'(State, semidetNoneOut) ->
+    ReturnType = 'bool' 
+   ;
+    ReturnType = 'IEnumerable<bool>')),
+
+  /*							    
+  if (state._useFinalCutCode)
+  {
+    foreach (object bodyWithFinalCut in compileBodyWithFinalCut(BodyCode,functionArgNames, state))
+    {
+      yield return new Functor("function",
+      new object[] { ReturnType, ((Atom)name.getValue())._name, functionArgs, bodyWithFinalCut });
+    }
+  }
+  else
+  */
+  ('CompilerState.determinismEquals'(State, semidetNoneOut) ->
+    % The body already has returntrue for success.
+    append(BodyCode, [returnfalse], BodyWithReturn)
+   ;
+     ('CompilerState.determinismEquals'(State, detNoneOut) ->
+       % Don't need a return.
+       BodyWithReturn = BodyCode
+      ;
+       ('CompilerState.codeUsesYield'(State) ->
+         % There is at least one yield statement.
+         BodyWithReturn = BodyCode
+        ;
+         % We want an iterator but there is no yield statement, so make one.
+         append(BodyCode, [blockScope([foreach(call('YP.fail', []), [yieldfalse])])], 
+		BodyWithReturn)))),
+  FunctionCode = function(ReturnType, Name, FunctionArgs, BodyWithReturn).
+
+samePredicateRuleList([], [], []) :- !.
+samePredicateRuleList([First], [First], []) :- !.
+samePredicateRuleList([First|Rest], SamePredicateRuleList, RestRules) :-
+  f(FirstRule,_) = First,
+  [f(SecondRule,_)|_] = Rest,
+  
+  ((FirstHead :- _) = FirstRule -> true ; FirstHead = FirstRule),
+  ((SecondHead :- _) = SecondRule -> true ; SecondHead = SecondRule),
+  functor(FirstHead, Name, Arity),
+  (functor(SecondHead, Name, Arity) ->
+    % same predicate.
+    samePredicateRuleList(Rest, RestSamePredicates, RestRules),
+    SamePredicateRuleList = [First|RestSamePredicates]
+   ;  
+    SamePredicateRuleList = [First],
+    RestRules = Rest), !.
+
+% Input is a list of f(ArgAssignments, Calls) where ArgAssignments is a list 
+%   of f(VariableName, ArgName).  Set output to a list of blockScope(ClauseCode) where 
+%   ClauseCode is Calls prepended with assignments of VariableName to ArgName.
+%   However, if VariableName is in MergedArgNames, assume it is already used as the 
+%   function argument, so we don't need to assign it.
+maplist_compileClause([], _MergedArgNames, []) :- !.
+maplist_compileClause([f(ArgAssignments, Calls)|Rest], MergedArgNames,
+		      [blockScope(ClauseCode)|RestResults]) :-
+  prependArgAssignments(ArgAssignments, Calls, MergedArgNames, ClauseCode),
+  maplist_compileClause(Rest, MergedArgNames, RestResults), !.
+
+prependArgAssignments([], In, _MergedArgNames, In) :- !.
+prependArgAssignments([f(VariableName, ArgName)|RestArgAssignments], In, MergedArgNames, 
+		      ClauseCode) :-
+  (member(VariableName, MergedArgNames) ->
+    % VariableName is already the function argument, so don't declare it.
+    prependArgAssignments(RestArgAssignments, In, MergedArgNames, ClauseCode)
+   ;
+    prependArgAssignments(RestArgAssignments, [declare(object, VariableName, var(ArgName))|In], 
+			  MergedArgNames, ClauseCode)), !.
+
+% ClauseBag is a list of f(ArgAssignments, Calls) where ArgAssignments is a list of 
+%   f(VariableName, ArgName).
+% Succeed only if every clause assigns the same VariableName to ArgName, and return VariableName.
+argAssignedAll(_ArgName, [], VariableName) :- nonvar(VariableName), !.
+argAssignedAll(ArgName, [f(ArgAssignments, _Calls)|RestClauseBag], VariableName) :-
+  % Assume VariableName is never assigned to two different arg names.
+  member(f(VariableName, ArgName), ArgAssignments),
+  argAssignedAll(ArgName, RestClauseBag, VariableName).
+
+% Return a new list of arg(X) from each X in list.
+maplist_arg([], []) :- !.
+maplist_arg([First|Rest], [arg(First)|RestResults]) :-
+  maplist_arg(Rest, RestResults), !.
+
+% Set argument 3 to the list [arg1, arg2, ...] which has an entry for 
+%   each member of argument 1.
+getFunctionArgNames([], _StartArgNumber, []) :- !.
+getFunctionArgNames([_|Rest], StartArgNumber, [ArgName|RestFunctionArgs]) :-
+  number_codes(StartArgNumber, NumberCodes),
+  atom_codes(NumberAtom, NumberCodes),
+  atom_concat(arg, NumberAtom, ArgName), 
+  
+  NextArgNumber is StartArgNumber + 1,				
+  getFunctionArgNames(Rest, NextArgNumber, RestFunctionArgs), !.				
+
+% Compile Rule to Calls.
+% ArgAssignments is a list of f(VariableName, ArgName).
+compileBodyWithHeadBindings(Rule, VariableNameSuggestions, State, ArgAssignments, Calls) :-
+  (Head :- Body) = Rule,
+  'CompilerState.newVariableNames'(State, Rule, VariableNameSuggestions),
+
+  % Compile the HeadArgs and Body now so they add to _variableList in State.
+  Head =.. [_|HeadArgs],
+  maplist_compileTerm(HeadArgs, State, CompiledHeadArgs),
+  compileRuleBody(Body, State, BodyCode),
+
+  'CompilerState.variableNamesList'(State, VariableNamesList),
+  compileArgUnifications(HeadArgs, CompiledHeadArgs, 1, HeadArgs, BodyCode, ArgUnifications), 
+  compileDeclarations(VariableNamesList, HeadArgs, [], ArgAssignments, ArgUnifications, 
+		      Calls), !. 
+compileBodyWithHeadBindings(Rule, VariableNameSuggestions, State, ArgAssignments, Calls) :-
+  % Convert f(a). to f(a) :- true.
+  compileBodyWithHeadBindings((Rule :- true), VariableNameSuggestions, State, ArgAssignments,
+			      Calls), !.
+
+% compileArgUnifications(HeadArgs, CompiledHeadArgs, Index, AllHeadArgs, BodyCode, ArgUnifications)
+% Iterate through HeadArgs and CompiledHeadArgs and construct ArgUnifications.
+% Only add to ArgUnifications if getVariableArgIndex1 fails.
+% Index increments from 1 for each member of HeadArgs.
+% When done, bind the tail to BodyCode.
+compileArgUnifications([], _, _, _, BodyCode, BodyCode) :- !.
+compileArgUnifications([HeadArg|RestHeadArgs], [_|RestCompiledHeadArgs], Index, AllHeadArgs, 
+		       BodyCode, ArgUnifications) :- 
+  getVariableArgIndex1(HeadArg, AllHeadArgs, _ArgIndex1),
+  % We will assign the arg in a declaration.
+  NextIndex is Index + 1,
+  compileArgUnifications(RestHeadArgs, RestCompiledHeadArgs, NextIndex, AllHeadArgs, 
+			 BodyCode, ArgUnifications), !.
+compileArgUnifications([_HeadArg|RestHeadArgs], [CompiledHeadArg|RestCompiledHeadArgs], Index, 
+    AllHeadArgs, BodyCode, 
+    [foreach(call('YP.unify', [var(ArgName), CompiledHeadArg]), RestArgUnifications)]) :- 
+  number_codes(Index, NumberCodes),
+  atom_codes(NumberAtom, NumberCodes),
+  atom_concat(arg, NumberAtom, ArgName), 
+  NextIndex is Index + 1,
+  compileArgUnifications(RestHeadArgs, RestCompiledHeadArgs, NextIndex, AllHeadArgs, 
+	BodyCode, RestArgUnifications), !.
+
+% compileDeclarations(VariableNames, HeadArgs, ArgAssignmentsIn, ArgAssignmentsOut, 
+%         DeclarationsIn, DeclarationsOut)
+% Iterate through VariableNames adding variable declarations to DeclarationsOut.
+% The list of f(VariableName, ArgName) is added separately to ArgAssignmentsOut.
+compileDeclarations([], _HeadArgs, ArgAssignmentsIn, ArgAssignmentsIn, 
+		    DeclarationsIn, DeclarationsIn) :- !.
+compileDeclarations([(VariableName = Var)|RestVariableNames], HeadArgs, 
+		    ArgAssignmentsIn, ArgAssignmentsOut, DeclarationsIn, DeclarationsOut) :- 
+  getVariableArgIndex1(Var, HeadArgs, ArgIndex1),
+  % This variable came from the head args, so just assign to the arg.
+  number_codes(ArgIndex1, NumberCodes),
+  atom_codes(NumberAtom, NumberCodes),
+  atom_concat(arg, NumberAtom, ArgName), 
+  compileDeclarations(RestVariableNames, HeadArgs, 
+		      [f(VariableName, ArgName)|ArgAssignmentsIn], ArgAssignmentsOut,
+		      DeclarationsIn, DeclarationsOut), !.
+compileDeclarations([(VariableName = _Var)|RestVariableNames], HeadArgs, 
+		    ArgAssignmentsIn, ArgAssignmentsOut, DeclarationsIn,
+		    [declare('Variable', VariableName, new('Variable', []))|DeclarationsOut]) :- 
+  compileDeclarations(RestVariableNames, HeadArgs, ArgAssignmentsIn, ArgAssignmentsOut,
+      DeclarationsIn, DeclarationsOut), !.
+
+% If Var occurs once in the HeadArgs list, return the index, starting from 1. Otherwise, fail.
+% We only want it to occur once because if the variable occurs twice in
+%   the head args, we have to use YP.unify.
+getVariableArgIndex1(Var, [FirstHeadArgs|RestHeadArgs], 1) :-
+  sameVariable(Var, FirstHeadArgs),
+  !,
+  % Make sure we don't find it again.
+  \+ getVariableArgIndex1(Var, RestHeadArgs, _).
+getVariableArgIndex1(Var, [_|RestHeadArgs], Index) :-
+  getVariableArgIndex1(Var, RestHeadArgs, RestIndex),
+  Index is 1 + RestIndex, !.
+
+% Set PseudoCode to a list of pseudo code terms of nested "foreach" for each functor 
+% call in arg1.
+compileRuleBody(A, State, PseudoCode) :-
+  var(A),
+  % Default for single statement that's a variable.  We have to catch this first.
+  compileRuleBody((call(A), true), State, PseudoCode), !.  
+% Check for ,/2 .
+compileRuleBody((A, B), State, PseudoCode) :-
+  var(A),
+  % We have to catch this first.
+  compileRuleBody((call(A), B), State, PseudoCode), !.  
+compileRuleBody((A, B), State, PseudoCode) :-
+  % compileFunctorCall does a quick check with functorCallIsSpecialForm and fails if A is one
+  %   of the special forms handled below.
+  compileFunctorCall(A, State, ACode),
+  ('CompilerState.isDetNoneOut'(State, A),
+   compileRuleBody(B, State, BCode), 
+   PseudoCode = [ACode|BCode]
+   ;  
+   'CompilerState.isSemidetNoneOut'(State, A),
+   compileRuleBody(B, State, BCode),
+   PseudoCode = [if(ACode, BCode)]
+   ;
+   % Default for (A, B)
+   compileRuleBody(B, State, BCode), 
+   PseudoCode = [foreach(ACode, BCode)]), !.
+compileRuleBody(  ((A -> T ; B), C), State, PseudoCode) :-
+  compileRuleBody((A -> (T, C) ; B, C), State, PseudoCode), !.
+compileRuleBody(  ((A ; B), C), State, PseudoCode) :-
+  compileRuleBody((A, C ; B, C), State, PseudoCode), !.
+compileRuleBody(  ((\+ A), B), State, [if(not(ACode), BCode)]) :-
+  'CompilerState.isSemidetNoneOut'(State, A),
+  % If a is semidetNoneOut, treat (\+ A), B as if (!A) { B }.
+  compileFunctorCall(A, State, ACode),
+  compileRuleBody(B, State, BCode), !.
+compileRuleBody(  ((\+ A), B), State, PseudoCode) :-
+  compileRuleBody(((A -> fail ; true), B), State, PseudoCode), !.
+compileRuleBody(  (once(A), B), State, PseudoCode) :-
+  compileRuleBody(((A -> true ; fail), B), State, PseudoCode), !.
+compileRuleBody(  ((A -> T), B), State, PseudoCode) :-
+  compileRuleBody(((A -> T ; fail), B), State, PseudoCode), !.
+compileRuleBody(  ((A \= B), C), State, PseudoCode) :-
+  compileRuleBody(((\+ A = B), C), State, PseudoCode), !.
+compileRuleBody(  (!, A), State, PseudoCode) :-
+  % Assume detNoneOut or semidetNoneOut does not have a non-final cut, since that is for
+  % multiple results.
+  compileRuleBody(A, State, ACode),
+  append(ACode, [yieldbreak], PseudoCode), !.
+compileRuleBody(  ('$CUTIF'(Name), A), State, PseudoCode) :-
+  compileRuleBody(A, State, ACode),
+  append(ACode, [breakBlock(Name)], PseudoCode), !.
+compileRuleBody((fail, _), _State, []) :- !.
+compileRuleBody((true, A), State, PseudoCode) :-
+  compileRuleBody(A, State, PseudoCode), !.
+compileRuleBody(((A is Term), B), State, [foreach(call('YP.unify', [ACode, TermCode]), BCode)]) :-
+  % Do foreach for unify explicitly so we can call compileExpression.
+  compileTerm(A, State, ACode),
+  compileExpression(Term, State, TermCode),
+  compileRuleBody(B, State, BCode), !.
+compileRuleBody(('$DET_NONE_OUT'(ACode), B), State, [ACode|BCode]) :-
+  % Just inject the ACode which is already compiled.
+  compileRuleBody(B, State, BCode), !.
+compileRuleBody((A, B), State, [if(call(FunctionName, [X1Code, X2Code]), BCode)]) :-
+  A =.. [Name, X1, X2],
+  binaryExpressionConditional(Name, FunctionName),
+  compileExpression(X1, State, X1Code),
+  compileExpression(X2, State, X2Code),
+  compileRuleBody(B, State, BCode), !.
+compileRuleBody((findall(Template, Goal, Bag), B), State, PseudoCode) :-
+  compileTerm(Template, State, TemplateCode),
+  'CompilerState.gensym'(State, findallAnswers, FindallAnswers),
+  compileRuleBody((Goal, '$DET_NONE_OUT'(callMember(var(FindallAnswers), add, [])), fail), 
+		  State, GoalAndAddCode),
+  compileTerm(Bag, State, BagCode),
+  compileRuleBody(B, State, BCode),
+  append([declare('FindallAnswers', FindallAnswers, new('FindallAnswers', [TemplateCode]))|
+	  GoalAndAddCode],
+	 [foreach(callMember(var(FindallAnswers), result, [BagCode]), BCode)],
+	 PseudoCode), !.
+compileRuleBody((bagof(Template, Goal, Bag), B), State, PseudoCode) :-
+  compileBagof(result, Template, Goal, Bag, B, State, PseudoCode), !.
+compileRuleBody((setof(Template, Goal, Bag), B), State, PseudoCode) :-
+  compileBagof(resultSet, Template, Goal, Bag, B, State, PseudoCode), !.
+compileRuleBody((call(A), B), State, 
+		[foreach(call('YP.getIterator', [ATermCode, call('getDeclaringClass', [])]), 
+			 BCode)]) :-
+  % Debug: Is there a way to check if A isDetNoneOut or isSemidetNoneOut?
+  compileTerm(A, State, ATermCode),
+  compileRuleBody(B, State, BCode), !.
+compileRuleBody((current_predicate(A), B), State, 
+		[foreach(call('YP.current_predicate', [ATermCode, call('getDeclaringClass', [])]), 
+			 BCode)]) :-
+  compileTerm(A, State, ATermCode),
+  compileRuleBody(B, State, BCode), !.
+compileRuleBody((asserta(A), B), State, 
+		[call('YP.asserta', [ATermCode, call('getDeclaringClass', [])])|BCode]) :-
+  compileTerm(A, State, ATermCode),
+  compileRuleBody(B, State, BCode), !.
+compileRuleBody((assertz(A), B), State, 
+		[call('YP.assertz', [ATermCode, call('getDeclaringClass', [])])|BCode]) :-
+  compileTerm(A, State, ATermCode),
+  compileRuleBody(B, State, BCode), !.
+compileRuleBody((assert(A), B), State, PseudoCode) :-
+  % Just use assertz.
+  compileRuleBody((assertz(A), B), State, PseudoCode), !.
+compileRuleBody((catch(Goal, Catcher, Handler), B), State, 
+		[declare('YP.Catch', CatchGoal, 
+		    new('YP.Catch', [GoalTermCode, call('getDeclaringClass', [])])),
+		 foreach(var(CatchGoal), BCode),
+		 foreach(callMember(var(CatchGoal), unifyExceptionOrThrow, [CatcherTermCode]),
+			 HandlerAndBCode)]) :-
+  'CompilerState.gensym'(State, catchGoal, CatchGoal),
+  compileTerm(Goal, State, GoalTermCode),
+  compileTerm(Catcher, State, CatcherTermCode),
+  compileRuleBody(B, State, BCode),
+  compileRuleBody((Handler, B), State, HandlerAndBCode), !.
+compileRuleBody(  ((A, B), C), State, PseudoCode) :-
+  compileRuleBody((A, (B, C)), State, PseudoCode), !.
+% Now check for ;/2 .
+compileRuleBody((A ; B), State, PseudoCode) :-
+  var(A),
+  % We have to catch this first.
+  compileRuleBody((call(A) ; B), State, PseudoCode), !.  
+compileRuleBody(  (A -> T ; B), State, [breakableBlock(CutIfLabel, Code)]) :-
+  'CompilerState.gensym'(State, cutIf, CutIfLabel),
+  compileRuleBody((A, '$CUTIF'(CutIfLabel), T ; B), State, Code), !.
+compileRuleBody((! ; _B), State, PseudoCode) :-
+  % Handle this as a special case until the C# compiler bug is fixed:
+  % https://connect.microsoft.com/VisualStudio/feedback/ViewFeedback.aspx?FeedbackID=350416
+  % https://bugzilla.novell.com/show_bug.cgi?id=399175
+  % This happens when the CodeDomProvider in Compiler.compileAnonymousClause creates unreachable
+  %   code after the cut.
+  compileRuleBody(!, State, PseudoCode), !.  
+compileRuleBody((A ; B), State, PseudoCode) :-
+  % Default for (A ; B). This also handles the case of ((A ; B) ; C).
+  compileRuleBody(A, State, ACode),
+  compileRuleBody(B, State, BCode),
+  append(ACode, BCode, PseudoCode), !.
+% Check for body which is not ,/2 or ;/2 .
+compileRuleBody(!, State, [return]) :-
+  /*
+  state._useFinalCutCode = true;
+  % This will be bound later.
+  PseudoCode = state._finalCutCode, !.
+  */
+  'CompilerState.determinismEquals'(State, detNoneOut), !.
+compileRuleBody(!, State, [returntrue]) :-
+  'CompilerState.determinismEquals'(State, semidetNoneOut), !.
+compileRuleBody(!, State, [yieldtrue, yieldbreak]) :- 
+  'CompilerState.setCodeUsesYield'(State), !.
+compileRuleBody('$CUTIF'(Name), _State, [breakBlock(Name)]) :- !.
+compileRuleBody(true, State, [return]) :-
+  'CompilerState.determinismEquals'(State, detNoneOut), !.
+compileRuleBody(true, State, [returntrue]) :-
+  'CompilerState.determinismEquals'(State, semidetNoneOut), !.
+compileRuleBody(true, State, [yieldfalse]) :- 
+  'CompilerState.setCodeUsesYield'(State), !.
+compileRuleBody(A, State, PseudoCode) :-
+  % Default for single statement.  Make it ,/2 so it is checked by the above.
+  compileRuleBody((A, true), State, PseudoCode), !.
+
+% Compile bagof or setof.  ResultMethod is result or resultSet.
+compileBagof(ResultMethod, Template, Goal, Bag, B, State, PseudoCode) :-
+  compileTerm(Template, State, TemplateCode),
+  compileTerm(Goal, State, GoalTermCode),
+  unqualifiedGoal(Goal, UnqualifiedGoal),
+  'CompilerState.gensym'(State, bagofAnswers, BagofAnswers),
+  compileRuleBody((UnqualifiedGoal, '$DET_NONE_OUT'(callMember(var(BagofAnswers), add,[])), fail), 
+		  State, GoalAndAddCode),
+  compileTerm(Bag, State, BagCode),
+  compileRuleBody(B, State, BCode),
+  append([declare('BagofAnswers', BagofAnswers, new('BagofAnswers', [TemplateCode, GoalTermCode]))|
+	  GoalAndAddCode],
+	 [foreach(callMember(var(BagofAnswers), ResultMethod, [BagCode]), BCode)],
+	 PseudoCode), !.
+
+% As a helper for compileBagof, set UnqualifiedGoal to Goal without the leading ^ terms.
+unqualifiedGoal(Goal, call(Goal)) :- 
+  % If the var Goal itself has ^ qualifiers, YP.getIterator will skip them.
+  var(Goal), !.
+unqualifiedGoal((_ ^ Goal), UnqualifiedGoal) :- 
+  unqualifiedGoal(Goal, UnqualifiedGoal), !.
+unqualifiedGoal(UnqualifiedGoal, UnqualifiedGoal) :- !.
+
+binaryExpressionConditional(=:=, 'YP.equal') :- !.
+binaryExpressionConditional(=\=, 'YP.notEqual') :- !.
+binaryExpressionConditional(>, 'YP.greaterThan') :- !.
+binaryExpressionConditional(<, 'YP.lessThan') :- !.
+binaryExpressionConditional(>=, 'YP.greaterThanOrEqual') :- !.
+binaryExpressionConditional(=<, 'YP.lessThanOrEqual') :- !.
+
+% If functorCallIsSpecialForm(Name, Arity), then this fails.  Otherwise, 
+%   return a pseudocode "call" for functor.
+% This assumes Functor and State are nonvar.
+compileFunctorCall(Functor, State, PseudoCode) :-
+  Functor =.. [FunctorName|FunctorArgs],
+  functor(Functor, _, Arity),
+  functorCallFunctionName(State, FunctorName, Arity, FunctionName),
+  maplist_compileTerm(FunctorArgs, State, CompiledArgs),
+  (FunctionName == [] ->
+    PseudoCode = call('YP.matchDynamic', 
+		      [call('Atom.a', [object(FunctorName)]), objectArray(CompiledArgs)])
+   ;  
+    PseudoCode = functorCall(FunctionName, FunctorArgs, CompiledArgs)), !.
+
+% Convert the functor Name for the Arity to the function name for calling it.
+% This assumes State, Name and Arity are nonvar.
+% If functorCallIsSpecialForm(Name, Arity), then this fails.  Otherwise, this either 
+%   succeeds or throws an exception.
+% If this sets FunctionName to [] (dynamic module) then use YP.matchDynamic.
+functorCallFunctionName(_State, Name, Arity, _) :-
+  functorCallIsSpecialForm(Name, Arity), !, fail.
+functorCallFunctionName(_, Name, Arity, FunctionName) :-
+  functorCallYPFunctionName(Name, Arity, FunctionName), !.	
+functorCallFunctionName(State, Name, Arity, Name) :-
+  % If the Name Arity is defined locally in '', just use Name.
+  'CompilerState.nameArityHasModule'(State, Name, Arity, ''), !.
+% Debug: Should check CompilerState for other imports.
+functorCallFunctionName(_State, Name, _Arity, Name) :-
+  % If the Atom.module says it has an empty module name, just use Name.
+  'Atom.module'(Name, ''), !.
+functorCallFunctionName(_State, Name, _Arity, []) :-
+  'Atom.module'(Name, []), !.
+functorCallFunctionName(_State, Name, Arity, _) :-
+  'Atom.module'(Name, Module),
+  atom_concat('Not supporting calls to external module: ', Module, Message),
+  throw(error(type_error(callable, Name/Arity), Message)),
+  !.
+functorCallFunctionName(_State, Name, _Arity, _) :-
+  throw(error(type_error(callable, Name), 'Term is not callable')),
+  !.
+
+% Succeed if the functor Name and Arity requires special compilation by compileRuleBody.
+% This includes ,/2 and ;/2.
+% This assumes Name and Arity and nonvar.
+% If this fails, then you can make a "normal" call to the functor, but still need to use 
+%   functorCallFunctionName to get the real function name.
+:- pred(functorCallIsSpecialForm(::(univ, in), ::(univ, in)) is semidet).
+functorCallIsSpecialForm(Name, Arity) :-
+  (Arity == 0,
+   (Name == '!' ; Name == fail ; Name == true), !)
+  ;
+  (Arity == 1,
+   (Name == (\+) ; Name == once ; Name == '$CUTIF' ; Name == '$DET_NONE_OUT' ; 
+    Name == call ; Name == current_predicate ; Name == asserta ; Name == assertz ; 
+    Name == assert), !)
+  ;
+  (Arity == 2, 
+   (Name == ';' ; Name == ',' ; Name == (->) ; Name == (\=) ; Name == is ;
+    binaryExpressionConditional(Name, _)), !)
+  ;
+  (Arity == 3, 
+   (Name == findall ; Name == bagof ; Name == setof ; Name == catch), !).
+
+% A helper for functorCallFunctionName. Convert the functor name and
+% arity to the YP function, or fail.
+functorCallYPFunctionName(=, 2, 'YP.unify') :- !.
+functorCallYPFunctionName(=.., 2, 'YP.univ') :- !.
+functorCallYPFunctionName(var, 1, 'YP.var') :- !.
+functorCallYPFunctionName(nonvar, 1, 'YP.nonvar') :- !.
+functorCallYPFunctionName(arg, 3, 'YP.arg') :- !.
+functorCallYPFunctionName(functor, 3, 'YP.functor') :- !.
+functorCallYPFunctionName(repeat, 0, 'YP.repeat') :- !.
+functorCallYPFunctionName(get_code, 1, 'YP.get_code') :- !.
+functorCallYPFunctionName(current_op, 3, 'YP.current_op') :- !.
+functorCallYPFunctionName(atom_length, 2, 'YP.atom_length') :- !.
+functorCallYPFunctionName(atom_concat, 3, 'YP.atom_concat') :- !.
+functorCallYPFunctionName(sub_atom, 5, 'YP.sub_atom') :- !.
+functorCallYPFunctionName(atom_chars, 2, 'YP.atom_chars') :- !.
+functorCallYPFunctionName(atom_codes, 2, 'YP.atom_codes') :- !.
+functorCallYPFunctionName(char_code, 2, 'YP.char_code') :- !.
+functorCallYPFunctionName(number_chars, 2, 'YP.number_chars') :- !.
+functorCallYPFunctionName(number_codes, 2, 'YP.number_codes') :- !.
+functorCallYPFunctionName(copy_term, 2, 'YP.copy_term') :- !.
+functorCallYPFunctionName(sort, 2, 'YP.sort') :- !.
+functorCallYPFunctionName(nl, 0, 'YP.nl') :- !.
+functorCallYPFunctionName(write, 1, 'YP.write') :- !.
+functorCallYPFunctionName(put_code, 1, 'YP.put_code') :- !.
+functorCallYPFunctionName(see, 1, 'YP.see') :- !.
+functorCallYPFunctionName(seen, 0, 'YP.seen') :- !.
+functorCallYPFunctionName(tell, 1, 'YP.tell') :- !.
+functorCallYPFunctionName(told, 0, 'YP.told') :- !.
+functorCallYPFunctionName(clause, 2, 'YP.clause') :- !.
+functorCallYPFunctionName(retract, 1, 'YP.retract') :- !.
+functorCallYPFunctionName(abolish, 1, 'YP.abolish') :- !.
+functorCallYPFunctionName(retractall, 1, 'YP.retractall') :- !.
+functorCallYPFunctionName(atom, 1, 'YP.atom') :- !.
+functorCallYPFunctionName(integer, 1, 'YP.integer') :- !.
+functorCallYPFunctionName(float, 1, 'YP.isFloat') :- !.
+functorCallYPFunctionName(number, 1, 'YP.number') :- !.
+functorCallYPFunctionName(atomic, 1, 'YP.atomic') :- !.
+functorCallYPFunctionName(compound, 1, 'YP.compound') :- !.
+functorCallYPFunctionName(ground, 1, 'YP.ground') :- !.
+functorCallYPFunctionName(==, 2, 'YP.termEqual') :- !.
+functorCallYPFunctionName(\==, 2, 'YP.termNotEqual') :- !.
+functorCallYPFunctionName(@<, 2, 'YP.termLessThan') :- !.
+functorCallYPFunctionName(@=<, 2, 'YP.termLessThanOrEqual') :- !.
+functorCallYPFunctionName(@>, 2, 'YP.termGreaterThan') :- !.
+functorCallYPFunctionName(@>=, 2, 'YP.termGreaterThanOrEqual') :- !.
+functorCallYPFunctionName(throw, 1, 'YP.throwException') :- !.
+functorCallYPFunctionName(current_prolog_flag, 2, 'YP.current_prolog_flag') :- !.
+functorCallYPFunctionName(set_prolog_flag, 2, 'YP.set_prolog_flag') :- !.
+functorCallYPFunctionName(current_input, 1, 'YP.current_input') :- !.
+functorCallYPFunctionName(current_output, 1, 'YP.current_output') :- !.
+functorCallYPFunctionName(read_term, 2, 'Parser.read_term2') :- !.
+functorCallYPFunctionName(read_term, 3, 'Parser.read_term3') :- !.
+functorCallYPFunctionName(read, 1, 'Parser.read1') :- !.
+functorCallYPFunctionName(read, 2, 'Parser.read2') :- !.
+
+% Set Result to the code for the compiled Term, such as object(2).
+% State is used to look up 'CompilerState.getVariableName' and compileAtomModule. It is 
+%   not modified.
+compileTerm(Term, State, var(VariableName)) :- 
+  var(Term),
+  'CompilerState.getVariableName'(State, Term, VariableName), !.
+compileTerm([], _State, var('Atom.NIL')) :- !.
+compileTerm(Term, State, Code) :- 
+  atom(Term),
+  (compileAtomModule(Term, 0, State, ModuleCode) ->
+    Code = call('Atom.a', [object(Term), ModuleCode])
+   ;  
+    Code = call('Atom.a', [object(Term)])), !.
+compileTerm([First|Rest], State, call('ListPair.make', [objectArray(CompiledList)])) :- 
+  % Handle ListPair separately from Functor2.
+  nonvar(Rest),
+  Rest = [_|Rest2],
+  Rest2 \== [],
+  % List is at least 3 terms, so use ListPair.make which is more compact target code.
+  % maplist_compileTerm fails if the list is not well-formed.
+  maplist_compileTerm([First|Rest], State, CompiledList), !.
+compileTerm([First|Rest], State, new('ListPair', [Arg1, Arg2])) :- 
+  % Use repeated ListPair.  Also handles a list which does not end in [].
+  compileTerm(First, State, Arg1),
+  compileTerm(Rest, State, Arg2), !.
+compileTerm(Term, State, Result) :-
+  Term =.. [Name|TermArgs],
+  (TermArgs == [] -> 
+    % Number, etc.
+    Result = object(Name), ! ;
+  functor(Term, _, Arity),
+  (compileAtomModule(Name, Arity, State, ModuleCode) ->
+    NameCode = call('Atom.a', [object(Name), ModuleCode])
+   ;  
+    % The atom doesn't need a module, so just pass the name string to the functor constructor.
+    NameCode = object(Name)),
+  (TermArgs = [X1] ->
+    compileTerm(X1, State, Arg1),
+    Result = new('Functor1', [NameCode, Arg1]), ! ;
+  (TermArgs = [X1, X2] ->
+    compileTerm(X1, State, Arg1),
+    compileTerm(X2, State, Arg2),
+    Result = new('Functor2', [NameCode, Arg1, Arg2]), ! ;
+  (TermArgs = [X1, X2, X3],
+    compileTerm(X1, State, Arg1),
+    compileTerm(X2, State, Arg2),
+    compileTerm(X3, State, Arg3),
+    Result = new('Functor3', [NameCode, Arg1, Arg2, Arg3]), ! 
+   ;
+    maplist_compileTerm(TermArgs, State, Args),
+    Result = new('Functor', [NameCode, objectArray(Args)]), !)))).
+
+% If an Atom for Name Arity needs a module, set ModuleCode. Otherwise, fail.
+compileAtomModule(Name, Arity, State, ModuleCode) :-
+  'CompilerState.nameArityHasModule'(State, Name, Arity, ''),
+  % The atom is defined locally so we need the declaringClass.
+  % Debug: Should check for external modules.
+  ModuleCode = call('Atom.a', [object('')]), !.
+compileAtomModule(Name, _Arity, _State, ModuleCode) :-
+  'Atom.module'(Name, Module),
+  Module \== [],
+  % Pass through the module defined in Name.
+  ModuleCode = call('Atom.a', [object(Module)]), !.
+
+% For each element in the arg 1 input list, map to the arg 3 output list using compileTerm.
+% Fail if the input list is not a proper list.
+maplist_compileTerm([], _State, []) :- !.
+maplist_compileTerm([First|Rest], State, [FirstResult|RestResults]) :-
+  nonvar(Rest),
+  compileTerm(First, State, FirstResult),
+  maplist_compileTerm(Rest, State, RestResults), !.
+	    
+compileExpression(Term, State, Result) :-
+  nonvar(Term),
+  Term =.. [Name|TermArgs],
+  atom(Name),
+  (TermArgs = [X1], unaryFunction(Name, FunctionName) -> 
+    compileExpression(X1, State, Arg1),
+    Result = call(FunctionName, [Arg1]), ! ;
+  (Term = [_] -> 
+    % Single element list.  Assume it is a char.
+    compileTerm(Term, State, Result), ! ;
+  (TermArgs = [X1, X2], binaryFunction(Name, FunctionName) ->
+    compileExpression(X1, State, Arg1),
+    compileExpression(X2, State, Arg2),
+    Result = call(FunctionName, [Arg1, Arg2]), ! ;
+   functor(Term, _, Arity),
+   throw(error(type_error(evaluable, Name/Arity), 'Not an expression function'))))).
+compileExpression(Term, State, Result) :-
+  compileTerm(Term, State, Result), !.
+
+unaryFunction(-, 'YP.negate') :- !.
+unaryFunction(abs, 'YP.abs') :- !.
+unaryFunction(sign, 'YP.sign') :- !.
+unaryFunction(float, 'YP.toFloat') :- !.
+unaryFunction(floor, 'YP.floor') :- !.
+unaryFunction(truncate, 'YP.truncate') :- !.
+unaryFunction(round, 'YP.round') :- !.
+unaryFunction(ceiling, 'YP.ceiling') :- !.
+unaryFunction(sin, 'YP.sin') :- !.
+unaryFunction(cos, 'YP.cos') :- !.
+unaryFunction(atan, 'YP.atan') :- !.
+unaryFunction(exp, 'YP.exp') :- !.
+unaryFunction(log, 'YP.log') :- !.
+unaryFunction(sqrt, 'YP.sqrt') :- !.
+unaryFunction(\, 'YP.bitwiseComplement') :- !.
+
+binaryFunction(+, 'YP.add') :- !.
+binaryFunction(-, 'YP.subtract') :- !.
+binaryFunction(*, 'YP.multiply') :- !.
+binaryFunction(/, 'YP.divide') :- !.
+binaryFunction(//, 'YP.intDivide') :- !.
+binaryFunction(mod, 'YP.mod') :- !.
+binaryFunction(**, 'YP.pow') :- !.
+binaryFunction(>>, 'YP.bitwiseShiftRight') :- !.
+binaryFunction(<<, 'YP.bitwiseShiftLeft') :- !.
+binaryFunction(/\, 'YP.bitwiseAnd') :- !.
+binaryFunction(\/, 'YP.bitwiseOr') :- !.
+binaryFunction(min, 'YP.min') :- !.
+binaryFunction(max, 'YP.max') :- !.
+
+:- pred(convertFunctionCSharp(::(univ, in)) is det).
+convertFunctionCSharp(getDeclaringClass) :-
+  % Emit an inner class whose name we know so we can find the declaring class.
+  write('public class YPInnerClass {}'), nl,
+  write('public static Type getDeclaringClass() { return typeof(YPInnerClass).DeclaringType; }'), 
+  nl, nl, !.
+convertFunctionCSharp(function(ReturnType, Name, ArgList, Body)) :-
+  write('public static '),
+  write(ReturnType),
+  write(' '),
+  write(Name),
+  write('('),
+  convertArgListCSharp(ArgList),
+  write(') {'), nl,
+  Level = 1,
+  convertStatementListCSharp(Body, Level),
+  write('}'), nl, nl, !.
+	
+:- pred(convertStatementListCSharp(::(univ, in), ::(univ, in)) is det).
+convertStatementListCSharp([], _, _) :- !.
+convertStatementListCSharp([breakableBlock(Name, Body)|RestStatements], Level) :-
+    % Replace breakableBlock(Name, Body) with Body + label(Name).
+    append(Body, [label(Name) | RestStatements], NewStatements), 
+    convertStatementListCSharp(NewStatements, Level), !.
+convertStatementListCSharp([declare(Type, Name, Expression)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    % Only C# specifies the Type, so write it as-is.
+    write(Type),
+    write(' '),
+    write(Name),
+    write(' = '),
+    convertExpressionCSharp(Expression),
+    write(';'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([assign(Name, Expression)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write(Name),
+    write(' = '),
+    convertExpressionCSharp(Expression),
+    write(';'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([yieldtrue|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('yield return true;'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([yieldfalse|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('yield return false;'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([yieldbreak|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('yield break;'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([return|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('return;'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([returntrue|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('return true;'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([returnfalse|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('return false;'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([label(Name)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write(Name),
+    write(':'), nl,
+    (RestStatements == [] ->
+      % No more statements, so we need a target for the label.
+      convertIndentationCSharp(Level),
+      write('{}'), nl
+     ; true),
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([breakBlock(Name)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('goto '),
+    write(Name),
+    write(';'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([call(Name, ArgList)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write(Name),
+    write('('),
+    convertArgListCSharp(ArgList),
+    write(');'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+% functorCall(Name, FunctorArgs, ArgList) is the same as call(Name, ArgList), except we know
+%   that ArgList is the compiled version of the Prolog terms in FunctorArgs.
+convertStatementListCSharp([functorCall(Name, _FunctorArgs, ArgList)|RestStatements], Level) :-
+    convertStatementListCSharp([call(Name, ArgList)|RestStatements], Level), !.
+convertStatementListCSharp([callMember(var(Obj), Name, ArgList)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write(Obj),
+    write('.'),
+    write(Name),
+    write('('),
+    convertArgListCSharp(ArgList),
+    write(');'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([blockScope(Body)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('{'), nl,
+    NextLevel is Level + 1,
+    convertStatementListCSharp(Body, NextLevel),
+    convertIndentationCSharp(Level),
+    write('}'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([if(Expression, Body)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('if ('),
+    convertExpressionCSharp(Expression),
+    write(') {'), nl,
+    NextLevel is Level + 1,
+    convertStatementListCSharp(Body, NextLevel),
+    convertIndentationCSharp(Level),
+    write('}'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([foreach(Expression, Body)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('foreach (bool l'),
+    write(Level),
+    write(' in '),
+    convertExpressionCSharp(Expression),
+    write(') {'), nl,
+    NextLevel is Level + 1,
+    convertStatementListCSharp(Body, NextLevel),
+    convertIndentationCSharp(Level),
+    write('}'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+convertStatementListCSharp([throw(Expression)|RestStatements], Level) :-
+    convertIndentationCSharp(Level),
+    write('throw '),
+    convertExpressionCSharp(Expression),
+    write(';'), nl,
+    convertStatementListCSharp(RestStatements, Level), !.
+
+:- pred(convertIndentationCSharp(::(univ, in)) is det).
+convertIndentationCSharp(Level) :-
+  N is Level * 2,
+  repeatWrite(' ', N), !.
+
+:- pred(convertArgListCSharp(::(univ, in)) is det).
+convertArgListCSharp([]) :- !.
+convertArgListCSharp([Head|Tail]) :-
+  convertExpressionCSharp(Head),
+  (Tail \== [] -> write(', ') ; true),
+  convertArgListCSharp(Tail), !.
+
+:- pred(convertExpressionCSharp(::(univ, in)) is det).
+convertExpressionCSharp(arg(X)) :-
+  write('object '),
+  write(X), !.
+convertExpressionCSharp(call(Name, ArgList)) :-
+  write(Name),
+  write('('),
+  convertArgListCSharp(ArgList),
+  write(')'), !.
+% functorCall(Name, FunctorArgs, ArgList) is the same as call(Name, ArgList), except we know
+%   that ArgList is the compiled version of the Prolog terms in FunctorArgs.
+convertExpressionCSharp(functorCall(Name, _FunctorArgs, ArgList)) :-
+  convertExpressionCSharp(call(Name, ArgList)), !.
+convertExpressionCSharp(callMember(var(Obj), Name, ArgList)) :-
+  write(Obj),
+  write('.'),
+  write(Name),
+  write('('),
+  convertArgListCSharp(ArgList),
+  write(')'), !.
+convertExpressionCSharp(new(Name, ArgList)) :-
+  write('new '),
+  write(Name),
+  write('('),
+  convertArgListCSharp(ArgList),
+  write(')'), !.
+convertExpressionCSharp(var(Name)) :-
+  write(Name), !.
+convertExpressionCSharp(null) :-
+  write('null'), !.
+convertExpressionCSharp(not(X)) :-
+  write('!('),
+  convertExpressionCSharp(X),
+  write(')'), !.
+convertExpressionCSharp(and(X, Y)) :-
+  write('('),
+  convertExpressionCSharp(X),
+  write(') && ('),
+  convertExpressionCSharp(Y),
+  write(')'), !.
+convertExpressionCSharp(objectArray(ArgList)) :-
+  write('new object[] {'),
+  convertArgListCSharp(ArgList),
+  write('}'), !.
+convertExpressionCSharp(object(X)) :-
+  atom(X),
+  write('"'),
+  atom_codes(X, Codes),
+  convertStringCodesCSharp(Codes),
+  write('"'), !.
+convertExpressionCSharp(object(X)) :-
+  write(X), !.
+
+% Write the char codes, using putCStringCode.
+:- pred(convertStringCodesCSharp(::(univ, in)) is det).
+convertStringCodesCSharp([]) :- !.
+convertStringCodesCSharp([Code|RestCodes]) :-
+  putCStringCode(Code),
+  convertStringCodesCSharp(RestCodes), !.
+
+:- pred(convertFunctionJavascript(::(univ, in)) is det).
+convertFunctionJavascript(getDeclaringClass) :-
+  % For now, assume Javascript functions are global.
+  write('function getDeclaringClass() { return null; }'), nl, nl, !.
+convertFunctionJavascript(function(_, Name, ArgList, Body)) :-
+  write('function '),
+  write(Name),
+  write('('),
+  convertArgListJavascript(ArgList),
+  write(') {'), nl,
+  convertStatementListJavascript(Body, 1),
+  write('}'), nl, nl, !.
+
+:- pred(convertStatementListJavascript(::(univ, in), ::(univ, in)) is det).
+convertStatementListJavascript([], _) :- !.
+convertStatementListJavascript([breakableBlock(Name, Body)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write(Name),
+    write(':'), nl,
+    convertIndentationJavascript(Level),
+    write('{'), nl,
+    NextLevel is Level + 1,
+    convertStatementListJavascript(Body, NextLevel),
+    convertIndentationJavascript(Level),
+    write('}'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([declare(_Type, Name, Expression)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('var '),
+    write(Name),
+    write(' = '),
+    convertExpressionJavascript(Expression),
+    write(';'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([assign(Name, Expression)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write(Name),
+    write(' = '),
+    convertExpressionJavascript(Expression),
+    write(';'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([yieldtrue|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('yield true;'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([yieldfalse|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('yield false;'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([yieldbreak|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('return;'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([return|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('return;'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([returntrue|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('return true;'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([returnfalse|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('return false;'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([breakBlock(Name)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('break '),
+    write(Name),
+    write(';'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([call(Name, ArgList)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write(Name),
+    write('('),
+    convertArgListJavascript(ArgList),
+    write(');'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([functorCall(Name, _FunctorArgs, ArgList)|RestStatements], Level) :-
+    convertStatementListJavascript([call(Name, ArgList)|RestStatements], Level), !.
+convertStatementListJavascript([callMember(var(Obj), Name, ArgList)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write(Obj),
+    write('.'),
+    write(Name),
+    write('('),
+    convertArgListJavascript(ArgList),
+    write(');'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([blockScope(Body)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('{'), nl,
+    NextLevel is Level + 1,
+    convertStatementListJavascript(Body, NextLevel),
+    convertIndentationJavascript(Level),
+    write('}'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([if(Expression, Body)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('if ('),
+    convertExpressionJavascript(Expression),
+    write(') {'), nl,
+    NextLevel is Level + 1,
+    convertStatementListJavascript(Body, NextLevel),
+    convertIndentationJavascript(Level),
+    write('}'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([foreach(Expression, Body)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('for each (var l'),
+    write(Level),
+    write(' in '),
+    convertExpressionJavascript(Expression),
+    write(') {'), nl,
+    NextLevel is Level + 1,
+    convertStatementListJavascript(Body, NextLevel),
+    convertIndentationJavascript(Level),
+    write('}'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+convertStatementListJavascript([throw(Expression)|RestStatements], Level) :-
+    convertIndentationJavascript(Level),
+    write('throw '),
+    convertExpressionJavascript(Expression),
+    write(';'), nl,
+    convertStatementListJavascript(RestStatements, Level), !.
+
+:- pred(convertIndentationJavascript(::(univ, in)) is det).
+convertIndentationJavascript(Level) :-
+  N is Level * 2,
+  repeatWrite(' ', N), !.
+
+:- pred(convertArgListJavascript(::(univ, in)) is det).
+convertArgListJavascript([]) :- !.
+convertArgListJavascript([Head|Tail]) :-
+  convertExpressionJavascript(Head),
+  (Tail \== [] -> write(', ') ; true),
+  convertArgListJavascript(Tail), !.
+
+:- pred(convertExpressionJavascript(::(univ, in)) is det).
+convertExpressionJavascript(arg(X)) :-
+  write(X), !.
+convertExpressionJavascript(call(Name, ArgList)) :-
+  write(Name),
+  write('('),
+  convertArgListJavascript(ArgList),
+  write(')'), !.
+convertExpressionJavascript(functorCall(Name, _FunctorArgs, ArgList)) :-
+  convertExpressionJavascript(call(Name, ArgList)), !.
+convertExpressionJavascript(callMember(var(Obj), Name, ArgList)) :-
+  write(Obj),
+  write('.'),
+  write(Name),
+  write('('),
+  convertArgListJavascript(ArgList),
+  write(')'), !.
+convertExpressionJavascript(new(Name, ArgList)) :-
+  write('new '),
+  write(Name),
+  write('('),
+  convertArgListJavascript(ArgList),
+  write(')'), !.
+convertExpressionJavascript(var(Name)) :-
+  write(Name), !.
+convertExpressionJavascript(null) :-
+  write('null'), !.
+convertExpressionJavascript(not(X)) :-
+  write('!('),
+  convertExpressionJavascript(X),
+  write(')'), !.
+convertExpressionJavascript(and(X, Y)) :-
+  write('('),
+  convertExpressionJavascript(X),
+  write(') && ('),
+  convertExpressionJavascript(Y),
+  write(')'), !.
+convertExpressionJavascript(objectArray(ArgList)) :-
+  write('['),
+  convertArgListJavascript(ArgList),
+  write(']'), !.
+convertExpressionJavascript(object(X)) :-
+  atom(X),
+  write('"'),
+  atom_codes(X, Codes),
+  convertStringCodesJavascript(Codes),
+  write('"'), !.
+convertExpressionJavascript(object(X)) :-
+  write(X), !.
+
+% Write the char codes, using putCStringCode.
+:- pred(convertStringCodesJavascript(::(univ, in)) is det).
+convertStringCodesJavascript([]) :- !.
+convertStringCodesJavascript([Code|RestCodes]) :-
+  putCStringCode(Code),
+  convertStringCodesJavascript(RestCodes), !.
+
+:- pred(convertFunctionPython(::(univ, in)) is det).
+convertFunctionPython(getDeclaringClass) :-
+  % For now, assume Python functions are global scope of the declaring module.
+  write('def getDeclaringClass():'), nl,
+  write('  return globals()'), nl, nl, !.
+convertFunctionPython(function(_, Name, ArgList, Body)) :-
+  write('def '),
+  write(Name),
+  write('('),
+  convertArgListPython(ArgList),
+  write('):'), nl,
+  Level = 1,
+  % Since Python can't break a block to a label, we need to manually break.  
+  % Only use the ugly code if needed.
+  (hasBreakableBlockPython(Body) -> HasBreakableBlock = 1 ; HasBreakableBlock = 0),
+  (HasBreakableBlock == 1 ->
+    convertIndentationPython(Level),
+    write('doBreak = False'), nl
+   ; true),
+  convertStatementListPython(Body, Level, HasBreakableBlock),
+  nl, !.
+
+% Succeed if the statement list has a breakableBlock(_, _) anywhere.
+:- pred(hasBreakableBlockPython(::(univ, in)) is semidet).
+hasBreakableBlockPython([breakableBlock(_Name, _Body)|_RestStatements]) :- !.
+hasBreakableBlockPython([blockScope(Body)|_RestStatements]) :-
+  hasBreakableBlockPython(Body), !.
+hasBreakableBlockPython([if(_Expression, Body)|_RestStatements]) :-
+  hasBreakableBlockPython(Body), !.
+hasBreakableBlockPython([foreach(_Expression, Body)|_RestStatements]) :-
+  hasBreakableBlockPython(Body), !.
+hasBreakableBlockPython([_|RestStatements]) :-
+  hasBreakableBlockPython(RestStatements), !.
+
+:- pred(convertStatementListPython(::(univ, in), ::(univ, in)) is det).
+convertStatementListPython([], _, _) :- !.
+convertStatementListPython([breakableBlock(Name, Body)|RestStatements], Level, 
+			   HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write(Name), write(' = False'), nl,
+    NextLevel is Level + 1,
+    (Body == [] -> 
+      true
+     ;	
+      convertIndentationPython(Level),
+      write('for _ in [1]:'), nl,
+      convertStatementListPython(Body, NextLevel, HasBreakableBlock)),
+    % If doBreak is for this Name, turn off doBreak.
+    convertIndentationPython(Level),
+    write('if '), write(Name), write(':'), nl,
+    convertIndentationPython(NextLevel),
+    write('doBreak = False'), nl, 
+    convertIndentationPython(Level),
+    write('if doBreak:'), nl,
+    convertIndentationPython(NextLevel),
+    write('break'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([declare(_Type, Name, Expression)|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write(Name),
+    write(' = '),
+    convertExpressionPython(Expression),
+    nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([assign(Name, Expression)|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write(Name),
+    write(' = '),
+    convertExpressionPython(Expression),
+    nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([yieldtrue|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('yield True'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([yieldfalse|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('yield False'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([yieldbreak|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('return'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([return|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('return'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([returntrue|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('return True'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([returnfalse|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('return False'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([breakBlock(Name)|RestStatements], Level, HasBreakableBlock) :-
+    % This works because after every foreach, we check "if doBreak: break". 
+    convertIndentationPython(Level),
+    write(Name),
+    write(' = True'), nl,
+    convertIndentationPython(Level),
+    write('doBreak = True'), nl,
+    convertIndentationPython(Level),
+    write('break'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([call(Name, ArgList)|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write(Name),
+    write('('),
+    convertArgListPython(ArgList),
+    write(')'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([functorCall(Name, _FunctorArgs, ArgList)|RestStatements], Level, HasBreakableBlock) :-
+    convertStatementListPython([call(Name, ArgList)|RestStatements], Level, HasBreakableBlock), !.
+convertStatementListPython([callMember(var(Obj), Name, ArgList)|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write(Obj),
+    write('.'),
+    write(Name),
+    write('('),
+    convertArgListPython(ArgList),
+    write(')'), nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([blockScope(Body)|RestStatements], Level, HasBreakableBlock) :-
+    (HasBreakableBlock == 1, Body \== [] ->
+      convertIndentationPython(Level),
+      write('for _ in [1]:'), nl,
+      NextLevel is Level + 1
+     ;	
+      NextLevel = Level),
+    convertStatementListPython(Body, NextLevel, HasBreakableBlock),
+    (HasBreakableBlock == 1 ->
+      (Level > 1 -> 
+        convertIndentationPython(Level),
+        write('if doBreak:'), nl,
+        convertIndentationPython(NextLevel),
+        write('break'), nl 
+       ;true)
+     ;true),    
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([if(Expression, Body)|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('if '),
+    convertExpressionPython(Expression),
+    write(':'), nl,
+    NextLevel is Level + 1,
+    (Body == [] ->
+      convertIndentationPython(NextLevel),
+      write('pass'), nl
+     ;	
+      convertStatementListPython(Body, NextLevel, HasBreakableBlock)),
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([foreach(Expression, Body)|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('for l'),
+    write(Level),
+    write(' in '),
+    convertExpressionPython(Expression),
+    write(':'), nl,
+    NextLevel is Level + 1,
+    NextLevel is Level + 1,
+    (Body == [] ->
+      convertIndentationPython(NextLevel),
+      write('pass'), nl
+     ;	
+      convertStatementListPython(Body, NextLevel, HasBreakableBlock)),
+    (HasBreakableBlock == 1 ->
+      convertIndentationPython(Level),
+      write('if doBreak:'), nl,
+      convertIndentationPython(NextLevel),
+      write('break'), nl
+     ;
+      true),
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+convertStatementListPython([throw(Expression)|RestStatements], Level, HasBreakableBlock) :-
+    convertIndentationPython(Level),
+    write('raise '),
+    convertExpressionPython(Expression),
+    nl,
+    convertStatementListPython(RestStatements, Level, HasBreakableBlock), !.
+
+:- pred(convertIndentationPython(::(univ, in)) is det).
+convertIndentationPython(Level) :-
+  N is Level * 2,
+  repeatWrite(' ', N), !.
+
+:- pred(convertArgListPython(::(univ, in)) is det).
+convertArgListPython([]) :- !.
+convertArgListPython([Head|Tail]) :-
+  convertExpressionPython(Head),
+  (Tail \== [] -> write(', ') ; true),
+  convertArgListPython(Tail), !.
+
+:- pred(convertExpressionPython(::(univ, in)) is det).
+convertExpressionPython(arg(X)) :-
+  write(X), !.
+convertExpressionPython(call(Name, ArgList)) :-
+  write(Name),
+  write('('),
+  convertArgListPython(ArgList),
+  write(')'), !.
+convertExpressionPython(functorCall(Name, _FunctorArgs, ArgList)) :-
+  convertExpressionPython(call(Name, ArgList)), !.
+convertExpressionPython(callMember(var(Obj), Name, ArgList)) :-
+  write(Obj),
+  write('.'),
+  write(Name),
+  write('('),
+  convertArgListPython(ArgList),
+  write(')'), !.
+convertExpressionPython(new(Name, ArgList)) :-
+  write(Name),
+  write('('),
+  convertArgListPython(ArgList),
+  write(')'), !.
+convertExpressionPython(var(Name)) :-
+  write(Name), !.
+convertExpressionPython(null) :-
+  write('None'), !.
+convertExpressionPython(not(X)) :-
+  write('not ('),
+  convertExpressionPython(X),
+  write(')'), !.
+convertExpressionPython(and(X, Y)) :-
+  write('('),
+  convertExpressionPython(X),
+  write(') and ('),
+  convertExpressionPython(Y),
+  write(')'), !.
+convertExpressionPython(objectArray(ArgList)) :-
+  write('['),
+  convertArgListPython(ArgList),
+  write(']'), !.
+convertExpressionPython(object(X)) :-
+  atom(X),
+  write('"'),
+  atom_codes(X, Codes),
+  convertStringCodesPython(Codes),
+  write('"'), !.
+convertExpressionPython(object(X)) :-
+  write(X), !.
+
+% Write the char codes, using putCStringCode.
+:- pred(convertStringCodesPython(::(univ, in)) is det).
+convertStringCodesPython([]) :- !.
+convertStringCodesPython([Code|RestCodes]) :-
+  putCStringCode(Code),
+  convertStringCodesPython(RestCodes), !.
+
+% Put a C style code, escaping quote, backslash with backslash, and 
+%   nonprinting characters with \xXX.
+:- pred(putStringCode(::(univ, in)) is det).
+putCStringCode(Code) :-
+  Code =< 31,
+  (Code =< 15 -> 
+    write('\\x0'),
+    HexDigit = Code 
+   ; 
+    write('\\x1'),
+    HexDigit is Code - 16),
+  (HexDigit =< 9 -> HexChar is HexDigit + 48 ; HexChar is HexDigit + 55),
+  put_code(HexChar), !.
+putCStringCode(Code) :-
+  Code == 0'",
+  put_code(0'\\),
+  put_code(0'"), !.
+putCStringCode(Code) :-
+  Code == 0'\\,
+  put_code(0'\\),
+  put_code(0'\\), !.
+putCStringCode(Code) :-
+  put_code(Code), !.
+
+% Debug: Should this be in a central library?
+member(X,[X|_]).
+member(X,[_|Rest]) :- member(X,Rest).
+
+append([],List,List).
+append([X|List1],List2,[X|List12]) :- append(List1,List2,List12).
+
+
+/*
+        private static IEnumerable<object> compileBodyWithFinalCut
+            (object body, object functionArgNames, CompilerState state)
+        {
+            functionArgNames = YP.getValue(functionArgNames);
+
+            // Debug: Need to check if the state._determinism.
+            // We need a yieldbreak after the body before we reach the finishFinalCut code.
+            Variable BodyWithYieldBreak = new Variable();
+            foreach (bool l1 in append
+                (body, ListPair.make(Atom.a("yieldbreak")), BodyWithYieldBreak))
+            {
+                if (functionArgNames == Atom.NIL)
+                {
+                    // No args.  Go straight to finishFinalCut.
+                    foreach (bool l2 in state._finalCutCode.unify(ListPair.make
+                        (new Functor1("breakBlock", Atom.a("finishFinalCut")))))
+                    {
+                        yield return ListPair.make
+                            (new Functor2("breakableBlock",
+                                "finishFinalCut", BodyWithYieldBreak),
+                             Atom.a("yieldtrue"),
+                             Atom.a("yieldbreak"));
+                    }
+                }
+                else
+                {
+                    foreach (bool l2 in state._finalCutCode.unify(ListPair.make
+                        // We know this is the last pass so use yieldtrue.
+                        (new Functor2("if",
+                            getGroundTest(functionArgNames),
+                            ListPair.make
+                                (new Functor2("assign",
+                                    Atom.a("argResults"),
+                                    new Functor1("objectArray",
+                                        maplist_makeCopy(functionArgNames))),
+                                 new Functor1("breakBlock", Atom.a("finishFinalCut")))),
+                         Atom.a("yieldtrue"),
+                         Atom.a("yieldbreak"))))
+                    {
+                        yield return ListPair.make
+                            (new Functor3("declare",
+                                Atom.a("object[]"), Atom.a("argResults"), Atom.a("null")),
+                             new Functor2("breakableBlock",
+                                "finishFinalCut", BodyWithYieldBreak),
+                             new Functor2("foreach",
+                                new Functor2("call",
+                                    Atom.a("YP.unifyArrays"),
+                                    ListPair.make
+                                        (new Functor1("objectArray",
+                                            maplist_var(functionArgNames)),
+                                         new Functor1("var",
+                                            Atom.a("argResults")))),
+                                ListPair.make(Atom.a("yieldtrue"), Atom.a("yieldbreak"))));
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// For each X in list, return an expression to "and together"
+        /// call('YP.ground', var(X)).
+        /// </summary>
+        /// <param name="list"></param>
+        /// <returns></returns>
+        private static object getGroundTest(object list)
+        {
+            list = YP.getValue(list);
+
+            object groundTest = new Functor2("call",
+                    Atom.a("YP.ground"),
+                    ListPair.make(new Functor1("var", ((Functor2)list)._arg1)));
+            if (((Functor2)list)._arg2 == Atom.NIL)
+                return groundTest;
+            else
+                return new Functor2("and",
+                    groundTest,
+                    getGroundTest(((Functor2)list)._arg2));
+        }
+
+        /// <summary>
+        /// Return a new list of call('YP.makeCopy', [var(X), null]) from each X in list.
+        /// </summary>
+        /// <param name="list"></param>
+        /// <returns></returns>
+        private static object maplist_makeCopy(object list)
+        {
+            list = YP.getValue(list);
+            if (list.Equals(Atom.NIL))
+                return Atom.NIL;
+            return new ListPair
+                (new Functor2("call",
+                    Atom.a("YP.makeCopy"),
+                    ListPair.make
+                        (new Functor1("var", ((Functor2)list)._arg1),
+                // There is no free Variable, so use null for copyStore.
+                         Atom.a("null"))),
+                maplist_makeCopy(((Functor2)list)._arg2));
+        }
+*/
+

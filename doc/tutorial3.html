@@ -1,0 +1,189 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Yield Prolog Tutorial 3</title>
+</head>
+<body>
+<table style="width: 100%; text-align: left;" cellpadding="5"
+ cellspacing="2">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><a href="tutorial2.html">&lt;&lt;
+Tutorial 2</a> <a href="tutorial_toc.html">^^Contents</a> <a
+ href="tutorial_toc.html"></a><a href="tutorial4.html">Tutorial 4
+&gt;&gt;</a><br>
+      </td>
+      <td style="vertical-align: top;">
+      <h1>Yield Prolog Tutorial</h1>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<h1>3. <span style="font-family: monospace;">ListPair</span><br>
+</h1>
+In Tutorial 3, we work with the <span style="font-family: monospace;">ListPair</span>
+class to make lists.<br>
+<ul>
+  <li><span style="font-weight: bold;">Python:</span> <span
+ style="font-family: monospace;">source/python/examples/YieldPrologTutorial/tutorial3.py</span><br>
+  </li>
+  <li><span style="font-weight: bold;">C#:</span> <span
+ style="font-family: monospace;">source/csharp/examples/YieldPrologTutorial/Tutorial3.cs</span><br>
+In Visual Studio .NET, you can load <span
+ style="font-family: monospace;">YieldPrologTutorial.sln</span> . In
+the project properties, make sure the Startup Object is <span
+ style="font-family: monospace;">Tutorial3</span>.</li>
+  <li><span style="font-weight: bold;">Javascript (requires yield
+support such as Firefox 3):</span> <span
+ style="font-family: monospace;">source/javascript/examples/YieldPrologTutorial/tutorial3.js</span>
+.<br>
+Open <span style="font-family: monospace;">tutorial3.html</span> from
+the same directory in a browser.</li>
+</ul>
+<h2><a name="Making_a_list_with_ListPair"></a>Making a list with <span
+ style="font-family: monospace;">ListPair</span></h2>
+A <span style="font-family: monospace;">ListPair</span> has a "head"
+and a "tail". The head is the first element in the list and the tail is
+the rest of
+the list. Usually the tail points to another <span
+ style="font-family: monospace;">ListPair</span> object or to and empty
+list if there are no more elements in the list. In this way, you chain
+together <span style="font-family: monospace;">ListPair</span> objects
+to make a list of any length. <br>
+<br>
+Here we define a function <span style="font-family: monospace;">makeList</span>
+which sets <span style="font-family: monospace;">List</span> to a list
+from the two arguments <span style="font-family: monospace;">First</span>
+and <span style="font-family: monospace;">Second</span>:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">Python</span><br>
+      </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>import sys<br># Hack sys.path for the examples.<br>sys.path.append("../..")<br>from YP import *<br>from Variable import *<br>from ListPair import *<br><br>def makeList(First, Second, List):<br>    list1 = ListPair(Second, Atom.NIL)<br>    result = ListPair(First, list1)<br>    for l1 in YP.unify(List, result):<br>        yield False<br><br>def main():<br>    print "Return a list of 2 elements:"<br>    List = Variable()<br>    for l1 in makeList("a", "b", List):<br>        print "List =", List.getValue()<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial3<br>{<br>    static IEnumerable&lt;bool&gt; makeList<br>               (object First, object Second, object List) {<br>        ListPair list1 = new ListPair(Second, Atom.NIL);<br>        ListPair result = new ListPair(First, list1);<br>        foreach (bool l1 in YP.unify(List, result))<br>            yield return false;<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Return a list of 2 elements:");<br>        Variable List = new Variable();<br>        foreach (bool l1 in makeList("a", "b", List))<br>            Console.WriteLine("List = " + List.getValue());<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+It is easier to build lists starting from the end and working
+backwards, so
+<span style="font-family: monospace;">makeList</span> first sets <span
+ style="font-family: monospace;">list1</span> to a <span
+ style="font-family: monospace;">ListPair</span> where the head is <span
+ style="font-family: monospace;">Second</span> and the tail is the
+emtpy list <span style="font-family: monospace;">Atom.NIL</span>.
+(Nil is defined as "[]" which looks like an empty list.) On
+its own, <span style="font-family: monospace;">list1</span> is now
+a valid list with one element which is the <span
+ style="font-family: monospace;">Second</span> argument. Then it sets <span
+ style="font-family: monospace;">result</span> to a <span
+ style="font-family: monospace;">ListPair</span> where the head is <span
+ style="font-family: monospace;">First</span> and the tail is the <span
+ style="font-family: monospace;">list1</span> list we just made.
+Finally it unifies the result with the <span
+ style="font-family: monospace;">List</span> argument. (As we'll see,
+you don't have to use temporary variables like <span
+ style="font-family: monospace;">list1</span> and <span
+ style="font-family: monospace;">result</span>, but we do it here for
+clarity.)<br>
+<br>
+The main function calls <span style="font-family: monospace;">makeList</span>
+with arguments "a" and "b" and the third argument receives the result <span
+ style="font-family: monospace;">List</span>.&nbsp; <a
+ href="tutorial3.html#footnote1">[1]</a> This prints:<br>
+<pre>Return a list of 2 elements:<br>List = [a, b]<br></pre>
+This shows the result <span style="font-family: monospace;">[a, b]</span>
+in the standard Prolog way where the list elements are between brackets
+<span style="font-family: monospace;">[]</span> and separated by a
+comma.<br>
+<h2><a name="Unifying_two_lists"></a>Unifying two lists</h2>
+As always, since <span style="font-family: monospace;">makeList</span>
+uses unify it can be used in many ways. Consider this:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>import sys<br># Hack sys.path for the examples.<br>sys.path.append("../..")<br>from YP import *<br>from Variable import *<br>from ListPair import *<br><br>def makeList(First, Second, List):<br>    list1 = ListPair(Second, Atom.NIL)<br>    result = ListPair(First, list1)<br>    for l1 in YP.unify(List, result):<br>        yield False<br><br>def main():<br>    print "Unify two lists:"<br>    Second = Variable()<br>    for l1 in makeList("x", Second,<br>          ListPair("x", ListPair("y", Atom.NIL))):<br>        print "The second element is", Second.getValue()<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial3<br>{<br>    static IEnumerable&lt;bool&gt; makeList<br>               (object First, object Second, object List) {<br>        ListPair list1 = new ListPair(Second, Atom.NIL);<br>        ListPair result = new ListPair(First, list1);<br>        foreach (bool l1 in YP.unify(List, result))<br>            yield return false;<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Unify two lists:");<br>        Variable Second = new Variable();<br>        foreach (bool l1 in makeList("x", Second, <br>              new ListPair("x", new ListPair("y", Atom.NIL))))<br>            Console.WriteLine("The second element is " + <br>                              Second.getValue());<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+(The code for <span style="font-family: monospace;">makeList</span> is
+the same as before.) When the main function calls <span
+ style="font-family: monospace;">makeList</span>, the <span
+ style="font-family: monospace;">First</span> and <span
+ style="font-family: monospace;">Second</span> arguments are "x" and an
+unbound variable. And, instead of returning a list in the <span
+ style="font-family: monospace;">List</span> argument, it constructs
+and passes in the list <span style="font-family: monospace;">[x, y]</span>.
+(Notice that we can construct a list by chaining together many <span
+ style="font-family: monospace;">ListPair</span>.)<br>
+<br>
+As before, <span style="font-family: monospace;">makeList</span> sets <span
+ style="font-family: monospace;">result</span> to a list of the
+arguments <span style="font-family: monospace;">First</span> and <span
+ style="font-family: monospace;">Second</span>, then unifies this with
+the <span style="font-family: monospace;">List</span> argument<span
+ style="font-family: monospace;"></span>. When Prolog unifies two
+lists, it unifies the first element of both lists, then the second
+element of both lists, etc. In this case, because <span
+ style="font-family: monospace;">result</span> is a list of <span
+ style="font-family: monospace;">First</span> and <span
+ style="font-family: monospace;">Second</span>, <span
+ style="font-family: monospace;">makeList</span> unifies <span
+ style="font-family: monospace;">First</span> with the first element of
+<span style="font-family: monospace;">List</span> and <span
+ style="font-family: monospace;">Second</span> with the second element
+of <span style="font-family: monospace;">List</span>. What happens in
+this case? Since <span style="font-family: monospace;">First</span> is
+"x" and the first element of <span style="font-family: monospace;">List</span>
+is also "x", this succeeds. And since <span
+ style="font-family: monospace;">Second</span> is an unbound variable,
+unify binds it to the second element of <span
+ style="font-family: monospace;">List</span> which is "y". <a
+ href="#footnote2">[2]</a> So, the main function prints the value of <span
+ style="font-family: monospace;">Second</span>:<br>
+<pre>Unify two lists:<br>The second element is y<br></pre>
+We went through this in agonizing detail, but the idea is simple. When
+Prolog unifies two lists, it unifies each of the matching elements of
+both lists. (Both lists must have the same number of elements for unify
+to succeed.) If all of the elements are bound values, this checks that
+both lists are equal. But if an element of one of the lists is an
+unbound variable, this binds the variable to "extract" the value of the
+matching element from the other list.<br>
+<br>
+In <a href="tutorial4.html">Tutorial 4</a>, we do more advanced work
+with the parser, compiler and module system.<br>
+<br>
+<hr style="width: 100%; height: 2px;"><br>
+<a name="footnote1"></a>1. The equivalent Prolog code for this example
+is:<br>
+<pre>makeList(First, Second, List) :-<br>  List = [First, Second].<br>:- makeList(a, b, List).<br></pre>
+Of course, you can also write the more compact:<br>
+<pre>makeList(First, Second, [First, Second]).<br></pre>
+<a name="footnote2"></a>2. The equivalent Prolog code for this example
+is:<br>
+<pre>makeList(First, Second, List) :-<br>  List = [First, Second].<br>:- makeList(x, Second, [x, y]).<br></pre>
+<br>
+<br>
+</body>
+</html>

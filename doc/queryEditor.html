@@ -1,0 +1,144 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta http-equiv="content-type"
+ content="text/html; charset=ISO-8859-1">
+  <script type="text/javascript;version=1.7" src="YieldProlog.js"></script>
+  <script type="text/javascript;version=1.7">
+function submitQuery() {
+  if (document.queryForm.prolog.value == "") {
+    alert("Please enter Prolog code or click one of the Samples");
+    return;
+  }
+
+  var outputWriter = new YP.StringWriter();
+  YP.tell(outputWriter);
+  var Goal = new Variable();
+  var VariableList = new Variable();
+  for each (var l1 in parseGoal(document.queryForm.prolog.value, Goal, VariableList)) {
+      try {
+          var gotMatch = false;
+          for each (var l2 in YP.getIterator(Goal, null)) {
+              gotMatch = true;
+              if (YP.getValue(VariableList) != Atom.NIL) {
+                  // We are showing values, so separate each match with ";".
+                  writeValues(outputWriter, VariableList);
+                  outputWriter.writeLine(";");
+              }
+          }
+
+          if (gotMatch) {
+              if (YP.getValue(VariableList) == Atom.NIL)
+                  // We didn't show any values.  So just write true after matching (one or more times).
+                  outputWriter.writeLine("true");
+          }
+          else
+              outputWriter.writeLine("fail");
+      }
+      catch (exception) {
+          if (exception instanceof PrologException)
+            outputWriter.writeLine(exception._term.toString());
+          else
+            throw exception;
+      }
+  }
+
+  YP.told();
+  document.queryForm.output.value = outputWriter.toString();
+}
+
+// Parse goalString and yield for each Goal, setting VariableList to a list of 
+// (variableAtom = Var).
+function parseGoal(goalString, Goal, VariableList) {
+    // The parser requires a newline or space at the end.
+    YP.see(new YP.StringReader(goalString + " "));
+    var TermList = new Variable();
+    // parseInput set TermList to a list of f(Goal, VariableList).
+    for each (var l1 in parseInput(TermList)) {
+        // Close the input now before yielding.
+        YP.seen();
+        // Iterate through each member of TermList.
+        for (TermList = YP.getValue(TermList);
+             TermList instanceof Functor2 && TermList._name == Atom.DOT;
+             TermList = YP.getValue(TermList._arg2)) {
+            // Unify the head of the list with f(Goal, VariableList).
+            for each (var l2 in YP.unify
+                      (TermList._arg1, new Functor2(Atom.F, Goal, VariableList)))
+                yield false;
+        }
+        return;
+    }
+    // Close the input in case parseInput failed.
+    YP.seen();
+}
+
+// Write to outputWriter each entry in VariableList which is a list of (variableAtom = Var).
+function writeValues(outputWriter, VariableList) {
+    for (VariableList = YP.getValue(VariableList);
+         VariableList instanceof Functor2 && VariableList._name == Atom.DOT;
+         VariableList = YP.getValue(VariableList._arg2)) {
+        var variableAndValue = YP.getValue(VariableList._arg1);
+        if (variableAndValue instanceof Functor2) {
+            outputWriter.writeLine("");
+            outputWriter.write(YP.getValue(variableAndValue._arg1).toString());
+            outputWriter.write(" = ");
+            outputWriter.write(YP.getValue(variableAndValue._arg2).toString());
+        }
+    }
+}
+
+  </script>
+  <title>Yield Prolog Query Editor</title>
+</head>
+<body>
+<table style="width: 100%; text-align: left;" cellpadding="5"
+ cellspacing="2">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><a href="index.html">^^Home</a><a
+ href="tutorial1.html"><br>
+      </a></td>
+      <td style="vertical-align: top;">
+      <h1>Yield Prolog Query Editor<br>
+      </h1>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<span style="font-weight: bold;">Congratulations!</span> Your browser
+has just loaded the full-featured Prolog environment in <a
+ href="YieldProlog.js">YieldProlog.js</a>, complete with a
+Prolog parser and compiler.<br>
+Click one of the Samples or type some Prolog, then
+click Run to see the result. (Requires <a
+ href="http://www.mozilla.com/firefox/">Firefox 3</a> or <a
+ href="http://www.seamonkey-project.org/">Seamonkey
+2</a>.)<br>
+<br>
+<form onsubmit="return (submitQuery(), false)" method="post"
+ name="queryForm">Query:<br>
+  <textarea cols="80" rows="9" name="prolog" type="text">write('Hello&nbsp;world!'),&nbsp;nl.</textarea><br>
+Samples: <a href="javascript:void(0)"
+ onclick="document.queryForm.prolog.value = 'write(\'Hello world!\'), nl.'">Hello
+world</a> <a href="javascript:void(0)"
+ onclick="document.queryForm.prolog.value = 'X is 2 + 2.'">2+2</a> <a
+ href="javascript:void(0)"
+ onclick="document.queryForm.prolog.value = 'assert(parent(\'Chelsea\', \'Hillary\')).\nassert(parent(\'Chelsea\', \'Bill\')).\n\nassert(brother(\'Hillary\', \'Tony\')).\nassert(brother(\'Hillary\', \'Hugh\')).\nassert(brother(\'Bill\', \'Roger\')).\n\nassert((uncle(Person, Uncle) :-\n          parent(Person, Parent),\n          brother(Parent, Uncle))).'">assert
+uncle</a> <a href="javascript:void(0)"
+ onclick="document.queryForm.prolog.value = 'uncle(Person, Uncle).'">query
+uncle</a> <a href="javascript:void(0)"
+ onclick="document.queryForm.prolog.value = 'setof(Uncle, Parent^(parent(Person, Parent), brother(Parent, Uncle)), Uncles).'">all
+Uncles
+(using
+setof)</a> <a href="javascript:void(0)"
+ onclick="document.queryForm.prolog.value = 'abolish(parent/2).\nabolish(brother/2).\nabolish(uncle/2).'">abolish
+uncle</a> <a href="javascript:void(0)"
+ onclick="document.queryForm.prolog.value = 'read(&quot;\n% This string is converted to a list of char codes, parsed, and bound to Goal.\nwrite(\'Hello world!\'),\nnl.\n&quot;,   Goal), Goal.'">parse
+and
+call</a> <br>
+  <input value="Run" name="compile" type="submit"><br>
+  <br>
+Output:<br>
+  <textarea cols="80" rows="10" name="output" type="text"></textarea></form>
+</body>
+</html>

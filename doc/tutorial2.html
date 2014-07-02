@@ -1,0 +1,318 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Yield Prolog Tutorial 2</title>
+</head>
+<body>
+<table style="width: 100%; text-align: left;" cellpadding="5"
+ cellspacing="2">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><a href="tutorial1.html">&lt;&lt;
+Tutorial 1</a> <a href="tutorial_toc.html">^^Contents</a> <a
+ href="tutorial3.html">Tutorial 3 &gt;&gt;</a></td>
+      <td style="vertical-align: top;">
+      <h1>Yield Prolog Tutorial</h1>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<h1>2. <span style="font-family: monospace;">Variable</span> and "Cut"<br>
+</h1>
+In Tutorial 2, we begin working with the actual classes used by Yield
+Prolog<span style="font-family: monospace;"></span>. The example code
+is in the
+distribution directory:<br>
+<ul>
+  <li><span style="font-weight: bold;">Python:</span> <span
+ style="font-family: monospace;">source/python/examples/YieldPrologTutorial/tutorial2.py</span><br>
+  </li>
+  <li><span style="font-weight: bold;">C#:</span> <span
+ style="font-family: monospace;">source/csharp/examples/YieldPrologTutorial/Tutorial2.cs</span><br>
+In Visual Studio .NET, you can load <span
+ style="font-family: monospace;">YieldPrologTutorial.sln</span> . In
+the project properties, make sure the Startup Object is <span
+ style="font-family: monospace;">Tutorial2</span>.</li>
+  <li><span style="font-weight: bold;">Javascript (requires yield
+support such as Firefox 3):</span> <span
+ style="font-family: monospace;">source/javascript/examples/YieldPrologTutorial/tutorial2.js</span>
+.<br>
+Open <span style="font-family: monospace;">tutorial2.html</span> from
+the same directory in a browser.</li>
+</ul>
+<h2><a name="Recap"></a>Recap</h2>
+Let's repeat the <a href="tutorial1.html#Finding_relations">"brother"
+example</a> from
+Tutorial 1 as a Yield Prolog program.<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">Python</span><br>
+      </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>import sys<br># Hack sys.path for the examples.<br>sys.path.append("../..")<br>from YP import *<br>from Variable import *<br><br>def brother(Person, Brother):<br>    for l1 in YP.unify(Person, "Hillary"):<br>        for l2 in YP.unify(Brother, "Tony"):<br>            yield False<br>        for l2 in YP.unify(Brother, "Hugh"):<br>            yield False<br>    for l1 in YP.unify(Person, "Bill"):<br>        for l2 in YP.unify(Brother, "Roger"):<br>            yield False<br><br>def main():<br>    print "Find relations:" <br>    Brother = Variable()<br>    for l1 in brother("Hillary", Brother):<br>        print "Hillary has brother", \<br>              Brother.getValue(), "."<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial2<br>{<br>    static IEnumerable&lt;bool&gt; brother<br>	(object Person, object Brother) {<br>        foreach (bool l1 in YP.unify(Person, "Hillary")) {<br>            foreach (bool l2 in YP.unify(Brother, "Tony"))<br>                yield return false;<br>            foreach (bool l2 in YP.unify(Brother, "Hugh"))<br>                yield return false;<br>        }<br>        foreach (bool l1 in YP.unify(Person, "Bill")) {<br>            foreach (bool l2 in YP.unify(Brother, "Roger"))<br>                yield return false;<br>        }<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Find relations:");<br>        Variable Brother = new Variable();<br>        foreach (bool l1 in brother("Hillary", Brother))<br>            Console.WriteLine("Hillary has brother " +<br>                Brother.getValue() + ".");<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+There are a few differences from Tutorial 1:<br>
+<ul>
+  <li>We import the classes <span style="font-family: monospace;"></span><span
+ style="font-family: monospace;">Variable</span> and <span
+ style="font-family: monospace;">YP</span> from the distribution
+directory.</li>
+  <li>We use <span style="font-family: monospace;">Variable</span>
+instead of <span style="font-family: monospace;">UnifyingVariable</span>
+(which was only for the tutorial).<br>
+  </li>
+  <li>When we want to get the value of a <span
+ style="font-family: monospace;">Variable</span>, we call its <span
+ style="font-family: monospace;">getValue()</span>.</li>
+  <li>Instead of <span style="font-family: monospace;">generalGetValue</span>
+and <span style="font-family: monospace;">generalUnify</span>, we use
+the static methods <span style="font-family: monospace;">YP.getValue</span>
+and <span style="font-family: monospace;">YP.unify</span> of the class
+    <span style="font-family: monospace;">YP</span>.<br>
+  </li>
+</ul>
+The <span style="font-family: monospace;">UnifyingVariable </span>class
+from Tutorial 1 let us make working
+Prolog programs, but we now discuss two important features added by the
+full <span style="font-family: monospace;">Variable </span>class:
+"variable
+chains" and "cutting" out of a <span style="font-family: monospace;">for...in</span>
+loop.<br>
+<h2><a name="Variable_chains"></a>Variable chains</h2>
+In <span style="font-family: monospace;">UnifyingVariable.unify</span>
+from Tutorial 1, what if the argument value is another <span
+ style="font-family: monospace;">UnifyingVariable</span>? If we bind a
+variable to another variable (which may be bound to yet another
+variable), this creates a "variable chain"? How can we handle this?<br>
+<br>
+This is actually a "good problem" because variable chains allow a
+useful programming technique, as we'll see. And we can easily handle
+this as
+follows. For the full <span style="font-family: monospace;">Variable</span>
+class, we make the <span style="font-family: monospace;">_value</span>
+private and you access it through the <span
+ style="font-family: monospace;">getValue</span> function. If the <span
+ style="font-family: monospace;">Variable </span>is
+unbound, <span style="font-family: monospace;">getValue</span> returns
+the <span style="font-family: monospace;">Variable</span>
+object (for the same reasons we did this in the general <span
+ style="font-family: monospace;">getValue</span> function). If the <span
+ style="font-family: monospace;">Variable</span> is bound to a non-<span
+ style="font-family: monospace;">Variable</span>object (like a string),
+just return the object. Otherwise, it is bound to another <span
+ style="font-family: monospace;">Variable</span>, so keep following
+the "variable chain". In
+this way, <span style="font-family: monospace;">getValue()</span>
+either returns the unbound <span style="font-family: monospace;">Variable</span>
+at the end of the variable chain or the value that the end <span
+ style="font-family: monospace;">Variable</span> is bound to.<br>
+<br>
+To see why a variable chain is useful, consider <span
+ style="font-family: monospace;">squaredRectangle</span>:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>import sys<br># Hack sys.path for the examples.<br>sys.path.append("../..")<br>from YP import *<br>from Variable import *<br><br>def squaredRectangle(Width, Height):<br>    for l1 in YP.unify(Width, Height):<br>        yield False<br><br>def main():<br>    print "Check if it is square:"<br>    for l1 in squaredRectangle(10, 10):<br>        print "10 by 10 rectangle is square."<br><br>    print "Make it square:"<br>    Width = Variable()<br>    Height = Variable()<br>    for l1 in Width.unify(10):<br>        for l2 in squaredRectangle(Width, Height):<br>            print "A square of width", \<br>                Width.getValue(), "has height", \<br>                Height.getValue(), "."<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial2<br>{<br>    static IEnumerable&lt;bool&gt; squaredRectangle<br>	(object Width, object Height) {<br>        foreach (bool l1 in YP.unify(Width, Height))<br>            yield return false;<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Check if it is square:");<br>        foreach (bool l1 in squaredRectangle(10, 10))<br>            Console.WriteLine("10 by 10 rectangle is square.");<br><br>        Console.WriteLine("Make it square:");<br>        Variable Width = new Variable();<br>        Variable Height = new Variable();<br>        foreach (bool l1 in Width.unify(10)) {<br>            foreach (bool l2 in squaredRectangle(Width, Height))<br>                Console.WriteLine("A square of width " +<br>                    Width.getValue() + " has height " +<br>                    Height.getValue() + ".");<br>        }<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+The simple <span style="font-family: monospace;">squaredRectangle</span>
+function just unifies <span style="font-family: monospace;">Width</span>
+and <span style="font-family: monospace;">Height</span>, which means
+that a rectangle is square if it has the same width and height.<br>
+<br>
+As with most Prolog functions, this can be used in many ways. In the
+main function we first call <span style="font-family: monospace;">squaredRectangle(10,
+10)</span>, which succeeds because the <span
+ style="font-family: monospace;">Width</span> and <span
+ style="font-family: monospace;">Height</span> are the same. Next we
+bind the variable <span style="font-family: monospace;">Width</span>
+to 10 and call <span style="font-family: monospace;">squaredRectangle(Width,
+Height</span>, which binds <span style="font-family: monospace;">Height</span>
+to 10. These print:<br>
+<pre>Check if it is square:<br>10 by 10 rectangle is square.<br>Make it square:<br>A square of width 10 has height 10.<br></pre>
+But what happens if we call <span style="font-family: monospace;">squaredRectangle</span>
+first, before we bind <span style="font-family: monospace;">Width</span>?<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>import sys<br># Hack sys.path for the examples.<br>sys.path.append("../..")<br>from YP import *<br>from Variable import *<br><br>def main():<br>    print "Make it square before we know the width:"<br>    Width = Variable()<br>    Height = Variable()<br>    for l1 in squaredRectangle(Width, Height):<br>        for l2 in Width.unify(10):<br>            print "A square of width", \<br>                Width.getValue(), "has height", \<br>                Height.getValue(), "." <br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial2<br>{<br>    static void Main(string[] args) {<br>        Console.WriteLine<br>	   ("Make it square before we know the width:");<br>        Variable Width = new Variable();<br>        Variable Height = new Variable();<br>        foreach (bool l1 in <br>		  squaredRectangle(Width, Height)) {<br>            foreach (bool l2 in Width.unify(10))<br>                Console.WriteLine("A square of width " +<br>                    Width.getValue() + " has height " +<br>                    Height.getValue() + ".");<br>        }<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+Similar to before, this prints:<br>
+<pre>Make it square before we know the width:<br>A square of width 10 has height 10.<br></pre>
+But how can this be? When we first call <span
+ style="font-family: monospace;">squaredRectangle</span>, <span
+ style="font-family: monospace;">Width</span> is still unbound, so how
+does it know to bind <span style="font-family: monospace;">Height</span>
+to 10? It doesn't. Instead, it binds <span
+ style="font-family: monospace;">Width</span> to <span
+ style="font-family: monospace;">Height</span> while <span
+ style="font-family: monospace;">Height</span> is still an unbound
+variable, in a "variable chain". Next, how can <span
+ style="font-family: monospace;">Width.unify(10)</span> bind <span
+ style="font-family: monospace;">Width</span> to 10,
+because it is already bound to <span style="font-family: monospace;">Height</span>?
+Again, it doesn't. <span style="font-family: monospace;">Width.unify</span>
+follows the variable chain to find the unbound <span
+ style="font-family: monospace;">Height</span> variable and binds that
+to 10. Finally, when we want the value from <span
+ style="font-family: monospace;">Width.getValue()</span>, this follows
+the variable chain to find that <span style="font-family: monospace;">Height</span>
+is bound to 10 and returns that.<br>
+<br>
+Looking at the details may be a little confusing, but the concept is
+this: <span style="font-family: monospace;">unify</span> says that any
+two things are equal. Even if they are two unbound variables, <span
+ style="font-family: monospace;">unify</span> makes sure that if one of
+them is ever bound to a value, the other one will appear to be bound to
+the same value. This is useful, especially when you are dealing with
+structures that have lots of variables in them. You might figure out
+that parts of two different structures are the same, even though you
+don't know what the exact values are yet. Later, if you bind the
+variables in one of the structures, the other structure will appear to
+have the same values in the parts that you said are the same.<br>
+<h2><a name="Cutting_out_of_a_loop"></a>"Cutting" out of a loop</h2>
+When we call a function like <span style="font-family: monospace;">brother</span>,
+it yields all
+matches that unify with the arguments. But what if we want a function
+called <span style="font-family: monospace;">anyBrother</span> that
+only yields the
+first match? We can break out of the <span
+ style="font-family: monospace;">for...in</span> loop like this:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>import sys<br># Hack sys.path for the examples.<br>sys.path.append("../..")<br>from YP import *<br>from Variable import *<br><br>def anyBrother(Person, Brother):<br>    for l1 in brother(Person, Brother):<br>        yield False<br>        break<br><br>def main():<br>    print "Get one match:"<br>    Brother = Variable()<br>    for l1 in anyBrother("Hillary", Brother):<br>        print "Hillary has a brother", \<br>              Brother.getValue(), "."<br>    for l1 in anyBrother("Bill", Brother):<br>        print "Bill has a brother", \<br>              Brother.getValue(), "."<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial2<br>{<br>    static IEnumerable&lt;bool&gt; anyBrother<br>	(object Person, object Brother) {<br>        foreach (bool l1 in brother(Person, Brother)) {<br>            yield return false;<br>            break;<br>        }<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Get one match:");<br>        Variable Brother = new Variable();<br>        foreach (bool l1 in anyBrother("Hillary", Brother))<br>            Console.WriteLine("Hillary has a brother " +<br>                Brother.getValue() + ".");<br>        foreach (bool l1 in anyBrother("Bill", Brother))<br>            Console.WriteLine("Bill has a brother " +<br>                Brother.getValue() + ".");<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+In <span style="font-family: monospace;">anyBrother</span>, as soon as
+it gets the first result, it breaks out of the loop so that it only
+yields once. As expected, this prints:<br>
+<pre>Get one match:<br>Hillary has a brother Tony.<br>Bill has a brother Roger.<br></pre>
+Often, you only want to know if one solution exists, so in Prolog you
+can "cut" <a href="#footnote1">[1]</a> out of a loop like this, which
+is more efficient.<br>
+<h2><a name="Using_cut_for_negation"></a>Using "cut" for negation</h2>
+Also, we can use "cut" to do negation. Here is a function <span
+ style="font-family: monospace;">noBrother</span> which succeeds if <span
+ style="font-family: monospace;">Person</span> has no brother:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>import sys<br># Hack sys.path for the examples.<br>sys.path.append("../..")<br>from YP import *<br>from Variable import *<br><br>def noBrother(Person):<br>    Brother = Variable()<br>    for l1 in brother(Person, Brother):<br>        return<br>    yield False<br><br>def main():<br>    print "Use cut for negation:"<br>    for l1 in noBrother("Hillary"):<br>        print "Hillary has no brother."<br>    for l1 in noBrother("Chelsea"):<br>        print "Chelsea has no brother."<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial2<br>{<br>    static IEnumerable&lt;bool&gt; noBrother(object Person) {<br>        Variable Brother = new Variable();<br>        foreach (bool l1 in brother(Person, Brother))<br>            yield break;<br>        yield return false;<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Use cut for negation:");<br>        foreach (bool l1 in noBrother("Hillary"))<br>            Console.WriteLine("Hillary has no brother.");<br>        foreach (bool l1 in noBrother("Chelsea"))<br>            Console.WriteLine("Chelsea has no brother.");<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+In <span style="font-family: monospace;">noBrother</span>, if we get a
+first match for <span style="font-family: monospace;">brother(Person,
+Brother)</span> for any <span style="font-family: monospace;">Brother</span>,
+then cut out of the whole <span style="font-family: monospace;">noBrother</span>
+function without yielding. Otherwise, if the loop finishes without
+matching any brother, then yield once, meaning that there was "no
+brother" <a href="#footnote2">[2]</a>. In the main function, we first
+call <span style="font-family: monospace;">noBrother("Hillary")</span>,
+but "Hillary" does match a brother, so <span
+ style="font-family: monospace;">noBrother</span> does not succeed.
+Next, we call <span style="font-family: monospace;">noBrother("Chelsea")</span>,
+and since <span style="font-family: monospace;">brother</span> does
+not match any brother for "Chelsea", <span
+ style="font-family: monospace;">noBrother</span> yields once so that
+we print "Chelsea has no brother":<br>
+<pre>Use cut for negation:<br>Chelsea has no brother.<br></pre>
+In <a href="tutorial3.html">Tutorial 3</a>, we work with lists.<br>
+<hr style="width: 100%; height: 2px;"><br>
+<a name="footnote1"></a>1. I keep saying "cut" because this is what
+Prolog calls the "!" operator. Here is the equivalent Prolog code for <span
+ style="font-family: monospace;">anyBrother</span>:<br>
+<pre>anyBrother(Person, Brother) :-<br>  brother(Person, Brother), !.<br></pre>
+You may remember that <span style="font-family: monospace;">Variable</span>
+needs to unbind the values before exiting the loop. So if we just break
+out of the loop, how does it do this? Inside the unify function, we use
+a <span style="font-family: monospace;">try...finally</span> block to
+unbind the variable:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>    if not self._isBound:<br>        self._value = YP.getValue(arg)<br>        self._isBound = True<br>        try:<br>            yield False<br>        finally:<br>            # Remove the binding.<br>            self._isBound = False<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>    if (!_isBound) {<br>        _value = YP.getValue(arg);<br>        _isBound = true;<br>        try {<br>            yield return false;<br>        }<br>        finally {<br>            // Remove the binding.<br>            _isBound = false;<br>        }<br>    }<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+So, if you break out of a loop, the compiler is smart enough to call
+the <span style="font-family: monospace;">finally</span> block when
+closing the iterator, and unbinds the variable as expected.<br>
+<br>
+<a name="footnote2"></a>2. The equivalent Prolog code is:<br>
+<pre>noBrother(Person) :-<br>  brother(Person, _Brother), !, fail.<br>noBrother(_Person).<br><br>noBrother('Hillary'), write('Hillary has no brother.'), nl.<br>noBrother('Chelsea'), write('Chelsea has no brother.'), nl.<br></pre>
+There are other equivalent ways to write <span
+ style="font-family: monospace;">noBrother</span>, such as:<br>
+<pre>noBrother1(Person) :-<br>  (brother(Person, _Brother) -&gt; fail ; true).<br></pre>
+but the <span style="font-family: monospace;">-&gt;</span> operator
+translates into the pattern shown in <span
+ style="font-family: monospace;">noBrother</span> which makes it clear
+how to do an "if...then...else". Of course, you can also write:<br>
+<pre>noBrother2(Person) :- <br>&nbsp; \+ brother(Person, _Brother).<br></pre>
+but you can think of the <span style="font-family: monospace;">\+</span>
+operator as a simple "if...then...else" where "then" fails and "else"
+succeeds.<br>
+<br>
+</body>
+</html>

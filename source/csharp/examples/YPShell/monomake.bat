@@ -1,0 +1,3 @@
+rem This is a simple make file to compile a Yield Prolog program into a .exe file under Mono.
+rem For example, type: monomake YPShell.cs
+gmcs %1 ..\..\Atom.cs ..\..\BagofAnswers.cs ..\..\Compiler.cs ..\..\FindallAnswers.cs ..\..\Functor.cs ..\..\Functor1.cs ..\..\Functor2.cs ..\..\Functor3.cs ..\..\IndexedAnswers.cs ..\..\ListPair.cs ..\..\Parser.cs ..\..\PrologException.cs ..\..\Variable.cs ..\..\YP.cs

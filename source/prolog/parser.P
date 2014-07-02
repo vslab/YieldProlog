@@ -1,0 +1,1481 @@
+%   File   : read.pl
+%   Authors: David H. D. Warren + Richard A. O'Keefe
+%   Updated: 29 Aug 1989
+%   Purpose: Read Prolog terms in Dec-10 syntax.
+
+/*  This code was originally written at the University of Edinburgh.
+    David H. D. Warren wrote the first version of the parser.
+    Richard A. O'Keefe ripped it out of the Dec-10 Prolog system
+    and made it use only user-visible operations.  He also added
+    the feature whereby P(X,Y,Z) is read as call(P,X,Y,Z).
+    Alan Mycroft reorganised the code to regularise the functor modes.
+    This is both easier to understand (there are no more '?'s),
+    and also fixes bugs concerning the curious interaction of cut with
+    the state of parameter instantiation.
+    Richard A. O'Keefe then took it over again and made a number of
+    other changes.  There are three intentional differences between
+    this and the Dec-10 Prolog parser:
+
+  "predicate variables" as syntactic saccharine for call/N
+
+  when there is a syntax error, DEC-10 Prolog will backtrack
+  internally and read the next term.  This fails.  If you
+  call portable_read/1 with an uninstantiated argument, 
+  failure means a syntax error.  You can rely on it.
+
+  ", .." is not accepted in place of "|".  This was always a
+  parser feature, not a tokeniser feature:  any amount of
+  layout and commentary was allowed between the "," and the
+  "..".  It wouldn't be hard to allow again.
+
+    The tokeniser returns a list of the following tokens:
+
+  var(_,Name)    a variable with name Name
+  atom(AnAtom)    an atom
+  number(Num)    an integer or float
+  string(Chars)    a list of character codes
+
+  '{' '[' '(' ' ('  punctuation marks
+  '}' ']' ')'    ' (' is the usual "(", '(' is "("
+      '|' ','    coming directly after an atom.
+*/
+
+:- import('', [formatError/3, read_tokens/3]).
+      
+% Set TermList to a list of f(Term, Variables) for each input predicate, where Variables is
+%   a list of (VariableName = Variable).
+% This uses get_code.
+parseInput(TermList) :- findall(TermAndVariables, parseInputHelper(TermAndVariables), TermList).
+      
+% Keep returning f(Term, Variables) until end_of_file.
+parseInputHelper(f(Term, Variables)) :-
+  repeat,
+  portable_read3(Answer, Variables, _),
+  remove_pos(Answer, Term),
+  (Term == end_of_file -> !, fail ; true).
+      
+/*
+:- module(read, [
+  portable_gread/1,
+  portable_gread/2,
+%  portable_read/1,
+  portable_read/2,
+  portable_read/3,
+  remove_pos/2,
+  portable_read_position/3,     
+  bind_named_variables/2,
+  error_msg_syntax/3
+    
+   ]).
+*/
+
+% :- op(200,yfx,'--->').
+
+/*
+test_parse(T,PT,Comms) :- see('test.pl'), portable_read_position(T,PT,Comms), seen.
+
+%:- use_module(library(charsio)).
+
+:- dynamic error_msg_syntax/3.
+:- dynamic get_user_error/1.
+
+%get_user_error(user_error).
+get_user_error(user_output).
+*/
+clear_errors :- 
+  %retractall(error_msg_syntax(_,_,_)).
+  true.
+%steves remove position information code
+
+/* this predicate will remove position information from parse tree */
+remove_pos(X,X) :- var(X), !.
+
+remove_pos('$VAR'(_Pos,_Name,X),X) :- var(X),!.
+remove_pos([],[]) :- !.
+remove_pos([H|T], [NH|NT]) :- !,
+  remove_pos(H,NH),
+  remove_pos(T,NT).
+remove_pos((A,B), (NA,NB)) :- !,
+  remove_pos(A,NA),
+  remove_pos(B,NB).
+remove_pos(Atom, Atom) :-
+  functor(Atom, _F, 0).
+remove_pos(Term, NewTerm) :-
+  nonvar(Term),
+  Term =.. [Func, _Pos|Args],
+  remove_pos(Args, NArgs),
+  NewTerm =.. [Func|NArgs].
+
+/*
+:- use_module(tokens, [
+  read_tokens/1,
+  read_tokens/2,
+        get_current_position/1         
+   ]).
+*/
+
+% sccs_id('"@(#)89/08/29 read.pl    33.1"').
+
+
+portable_read_position(Term, PosTerm, Syntax) :-
+  portable_read(PosTerm,Syntax),
+  %portray_clause(posterm(PosTerm)),
+  remove_pos(PosTerm, Term).
+
+%   portable_read(?Answer)
+%   reads a term from the current input stream and unifies it with Answer.
+%   Dec-10 syntax is used.  If a syntax error is found, the parser FAILS.
+portable_read(Answer, Syntax) :-
+  %portray_clause(user_error,start_portable_read_tokens),
+  read_tokens1(Tokens),
+  %portray_clause(user_error,portable_read_tokens(Tokens)),
+  remove_comments(Tokens, ParseTokens, Syntax),
+  parse2(ParseTokens, Answer).
+
+%   portable_read(?Answer, ?Variables)
+%   reads a term from the current input stream and unifies it with
+%   Answer.  Variables is bound to a list of [Atom=Variable] pairs.
+%   The variables are listed in the order in which they appeared, but
+%   anonymous variables `_' do not appear at all.
+
+portable_read3(Answer, Variables, Syntax) :-
+  read_tokens2(Tokens, Variables),
+  remove_comments(Tokens, ParseTokens, Syntax),
+  parse2(ParseTokens, Answer).
+
+
+remove_comments([], [] ,[]).
+remove_comments([comment(S,E)|Xs], Ys, [comment(S,E)|Zs]) :-
+  !,
+  remove_comments(Xs,Ys,Zs).
+remove_comments(['['/Pos|Xs], ['['|Ys], [list(Pos, Pos2)|Zs]) :-
+  !,
+    Pos2 is Pos + 1,
+  remove_comments(Xs,Ys,Zs).
+remove_comments([']'/Pos|Xs], [']'|Ys], [list(Pos, Pos2)|Zs]) :-
+  !,
+    Pos2 is Pos + 1,
+  remove_comments(Xs,Ys,Zs).
+
+remove_comments([Token|Xs], [Token|Ys], Zs) :-
+  remove_comments(Xs,Ys,Zs).
+
+%   portable_gread(?Answer)
+%   reads a term from the current input stream, treating variable names
+%   as constants.  In particular, the variable name "_" is treated as
+%   the atom '_'; every occurrence of it is mapped to that atom.  The
+%   right way to hack this is to bend the tokeniser; but this is for
+%   compatibility with LPA Prolog, which wants a version that gives you
+%   the names (which is why LPA Prolog gets muddled about variables and
+%   constants with the same spelling).
+
+/*
+portable_gread(Answer) :-
+  read_tokens_1(RawTokens, _),
+  replace_variables_by_atoms(RawTokens, Tokens, yes),
+  parse2(Tokens, Answer).
+*/
+
+%   portable_gread(?Answer, ?VarNames)
+%   reads a term from the current input stream, treating variable names
+%   as constants (even as function symbols) and returning all the names
+%   of things that looked like variables.  Note that this means that a
+%   term like "Fred(a)" will be accepted, and Fred will be returned as
+%   one of the variable names, but the atom 'Fred' will NOT be considered
+%   as occurring anywhere in the result; the functor Fred/1 is NOT an
+%   occurrence of the atom Fred.
+/*
+portable_gread(Answer, VarNames) :-
+  read_tokens_1(RawTokens, Variables, _),
+  replace_variables_by_atoms(RawTokens, Tokens, HadAnon),
+  parse2(Tokens, Answer),
+  collect_variable_names(HadAnon, VarNames, Variables).
+
+replace_variables_by_atoms([], [], _).
+%replace_variables_by_atoms([var(_,X)|Xs], [atom(X)|Ys], HadAnon) :- !,
+replace_variables_by_atoms([var(_,X,_)|Xs], [atom(X,_Pos)|Ys], HadAnon) :- !,
+  %portray_clause(user_output,postion_info(Pos,X)),
+  ( X == '_' -> HadAnon = yes ; true ),
+  replace_variables_by_atoms(Xs, Ys, HadAnon).
+replace_variables_by_atoms([X|Xs], [X|Ys], HadAnon) :-
+  replace_variables_by_atoms(Xs, Ys, HadAnon).
+
+
+collect_variable_names(no, Names, Vars) :- !,
+  collect_variable_names(Vars, Names).
+collect_variable_names(yes, Names, Vars) :-
+  collect_variable_names(Vars, Names).
+
+collect_variable_names([], []).
+collect_variable_names([Name=_|Pairs], [Name|Names]) :-
+  collect_variable_names(Pairs, Names).
+*/
+
+
+%   bind_named_variables(DesiredBindings, Dictionary)
+%   takes a variable Dictionary as returned by read_tokens/2 or
+%   portable_read/2 (that is, a list of 'Name'=Variable pairs)
+%   and a list of DesiredBindings (again, a list of 'Name'=Value
+%   pairs, except that the Values are any terms you like).
+%   For each 'Name'=Value pair in DesiredBindings, the
+%   corresponding Variable in Dictionary is unified with Value.
+%   What is this for?  It lets you read a term and then supply
+%   values for variables by name, e.g.
+%  | ?- portable_read(Term, Dictionary),
+%  |    bind_named_variables(['X'=fred], Dictionary).
+%  |: /* input */ f(X,Y,X,Y).
+%  Dictionary = ['X'=fred,'Y'=_53],
+%  Term = f(fred,_53,fred,_53)
+/*
+bind_named_variables([], _).
+bind_named_variables([Name=Value|Bindings], Dictionary) :-
+  bind_named_variable(Dictionary, Name, Value),
+  bind_named_variables(Bindings, Dictionary).
+
+bind_named_variable([], _, _).
+bind_named_variable([Name=Variable|_], Name, Value) :- !,
+  Variable = Value.
+bind_named_variable([_|Dictionary], Name, Value) :-
+  bind_named_variable(Dictionary, Name, Value).
+*/
+
+%   expect(Token, TokensIn, TokensOut)
+%   reads the next token, checking that it is the one expected, and
+%   giving an error message if it is not.  It is used to look for
+%   right brackets of various sorts, as they're all we can be sure of.
+
+expect(Token, [Token|Rest], Rest) :- !.
+expect(Token, S0, _) :-
+  syntax_error([Token,or,operator,expected], S0).
+
+
+parse2(Tokens, Answer) :-
+  clear_errors,
+  (   parse(Tokens, 1200, Term, LeftOver),
+      all_read(LeftOver),
+      !,
+      Answer = Term
+  ;   syntax_error1(Tokens)
+  ).
+
+%   all_read(+Tokens)
+%   checks that there are no unparsed tokens left over.  Note that
+%   parse/4 is not determinate, so the failure of syntax_error/4
+%   may force parse/4 to look for another solution.
+
+all_read([]).
+all_read([Token|S]) :-
+  syntax_error([operator,expected,after,expression], [Token|S]).
+
+
+
+
+%   parse(+TokenList, +Precedence, -Term, -LeftOver)
+%   parses a Token List in a context of given Precedence,
+%   returning a Term and the unread Left Over tokens.
+
+parse([], _, _, _) :-
+  syntax_error([expression,expected], []).
+parse([Token|RestTokens], Precedence, Term, LeftOver) :-
+  parse5(Token, RestTokens, Precedence, Term, LeftOver).
+
+
+/*  There are several occurrences of parse/N in the context
+  parse(S1, Prio, Term, S2),
+  expect_one_of(PunctuationMarks, S2)
+  !
+    The punctuation marks in question are
+  , | ]      [lists]
+  }      {goals}
+  , )      compound(terms)
+  )      (parenthesised,terms)
+  -|      complete term; no actual token, alas.
+    Now the point here is that if we do not find the right kind of token,
+    we'll store an error message and then try to provoke parse/4 into
+    finding another parse which does end at the right spot.  We do NOT
+    like having cuts all over the place.  So to try to make things clearer,
+    we have a predicate full_parse/4 which goes as far as it possibly can.
+*/
+
+%   parse5(+Token, +RestTokens, +Precedence, -Term, -LeftOver)
+
+parse5('}', S0, _, _, _) :- cannot_start('}', S0).
+parse5(']', S0, _, _, _) :- cannot_start(']', S0).
+parse5(')', S0, _, _, _) :- cannot_start(')', S0).
+parse5(',', S0, _, _, _) :- cannot_start(',', S0).
+parse5('|', S0, _, _, _) :- cannot_start('|', S0).
+
+%parse5(string(Chars), S0, Precedence, Answer, S) :-
+%  exprtl0(S0, Chars, Precedence, Answer, S).
+parse5(string(Codes), S0, Precedence, Answer, S) :-
+  % Interpret parsed "abc" according to Prolog flag double_quotes.
+  (current_prolog_flag(double_quotes, atom) ->
+    atom_codes(Term, Codes)
+   ;
+   current_prolog_flag(double_quotes, chars) ->
+    atom_codes(A, Codes),
+    atom_chars(A, Term)
+   ;  
+    % Default to current_prolog_flag(double_quotes, codes)
+    Term = Codes),
+  exprtl0(S0, Term, Precedence, Answer, S).
+
+parse5(number(Number), S0, Precedence, Answer, S) :-
+  exprtl0(S0, Number, Precedence, Answer, S).
+
+parse5('[', [']'|S1], Precedence, Answer, S) :- !,
+  read_atom([]/0, S1, Precedence, Answer, S).
+parse5('[', S1, Precedence, Answer, S) :-
+  parse(S1, 999, Arg1, S2),    /* look for ",", "|", or "]" */
+  read_list(S2, RestArgs, S3),
+  !,
+  exprtl0(S3, [Arg1|RestArgs], Precedence, Answer, S).
+
+parse5('(', S1, Precedence, Answer, S) :-
+  parse(S1, 1200, Term, S2),    /* look for ")" */
+  expect(')', S2, S3),
+  !,
+  exprtl0(S3, Term, Precedence, Answer, S).
+
+parse5(' (', S1, Precedence, Answer, S) :-
+  parse(S1, 1200, Term, S2),    /* look for ")" */
+  expect(')', S2, S3),
+  !,
+  exprtl0(S3, Term, Precedence, Answer, S).
+
+parse5('{'/_Pos, ['}'|S1], Precedence, Answer, S) :- !,
+  read_atom('{}', S1, Precedence, Answer, S).
+
+parse5('{'/Pos, S1, Precedence, Answer, S) :-
+  parse(S1, 1200, Term, S2),    /* look for "}" */
+  expect('}', S2, S3),
+  !,  
+  exprtl0(S3, '{}'(Pos,Term), Precedence, Answer, S).
+
+parse5(var(Variable,Name,Pos), ['('|S1], Precedence, Answer, S) :- !,
+  parse(S1, 999, Arg1, S2),    % look for "," or ")"
+  read_args(S2, RestArgs, S3),
+  !,
+  Term =.. [call,'$VAR'(Pos,Name,Variable),Arg1|RestArgs],
+  exprtl0(S3, Term, Precedence, Answer, S).
+
+parse5(var(Variable,Name,Pos), S0, Precedence, Answer, S) :-
+  exprtl0(S0, '$VAR'(Pos,Name,Variable), Precedence, Answer, S).
+
+%parse5(atom(Atom), S0, Precedence, Answer, S) :-
+parse5(atom(Atom,P), S0, Precedence, Answer, S) :-
+%  read_atom(Atom, S0, Precedence, Answer, S).
+  read_atom(Atom/P, S0, Precedence, Answer, S).
+
+%read_atom(-, [number(Number)|S1], Precedence, Answer, S) :- !,
+read_atom((-)/_Pos, [number(Number)|S1], Precedence, Answer, S) :- !,
+  Negative is -Number,
+  exprtl0(S1, Negative, Precedence, Answer, S).
+
+read_atom(Functor/Pos, ['('|S1], Precedence, Answer, S) :- !,
+  parse(S1, 999, Arg1, S2),    % look for "," or ")"
+  read_args(S2, RestArgs, S3),
+  !,
+  Term =.. [Functor,Pos,Arg1|RestArgs],
+  %length(RestArgs, L),
+  %L1 is L +1, 
+  %Term = Functor/L1,  
+  exprtl0(S3, Term, Precedence, Answer, S).
+read_atom(Op/Pos, S0, Precedence, Answer, S) :-
+  prefixop(Op, Oprec, Aprec),
+  !,
+    /*  At this point we have consumed Op, which is an atom which might
+  be a prefix operator of precedence Prec, or it might just be an
+  atom.  We consider two things:  what does the next token tell
+  us, and what does the local precedence tell us?  The next token
+  tells us that
+  it may not be an operator  }, ], ), |, ,, end of list
+  it must be an operator    var, number, string, {, [, ' ('
+  it might be an operator    atom, '('
+    */
+  possible_right_operand(S0, Flag),
+  (   Flag < 0 ->    % can't be a prefix op
+      Term =.. [Op, Pos],
+      %exprtl0(S0, Op/Pos, Precedence, Answer, S)
+      exprtl0(S0, Term, Precedence, Answer, S)
+  ;   Oprec > Precedence ->
+      syntax_error([prefix,operator,Op,
+        in,context,with,precedence,Precedence], S0)
+  ;   Flag > 0 ->    % must be a prefix op
+      parse(S0, Aprec, Arg, S1),
+      !,
+      Term =.. [Op,Pos,Arg],
+      exprtl(S1, Oprec, Term, Precedence, Answer, S)
+  ;/* Flag = 0; it MIGHT be an atom */
+      peepop(S0, S1),
+      prefix_is_atom(S1, Oprec), % can't cut but would like to
+      exprtl(S1, Oprec, Op/Pos, Precedence, Answer, S)
+  ;/* Flag = 0; it CAN'T be an atom (we tried) */
+      parse(S0, Aprec, Arg, S1),
+      !,
+      Term =.. [Op,Pos,Arg],
+      exprtl(S1, Oprec, Term, Precedence, Answer, S)
+  ).
+read_atom(Atom/Pos, S0, Precedence, Answer, S) :-
+  Term =.. [Atom,Pos],
+  exprtl0(S0, Term, Precedence, Answer, S).
+%  exprtl0(S0, Atom, Precedence, Answer, S).
+
+
+cannot_start(Token, S0) :-
+  syntax_error([Token,cannot,start,an,expression], S0).
+
+
+%   read_args(+Tokens, -TermList, -LeftOver)
+%   parses {',' expr(999)} ')' and returns a list of terms.
+
+read_args([','|S1], [Term|Rest], S) :- !,
+  parse(S1, 999, Term, S2),
+  !,
+  read_args(S2, Rest, S).
+read_args([')'|S], [], S) :- !.
+read_args(S, _, _) :-
+  syntax_error([', or )',expected,in,arguments], S).
+
+
+%   read_list(+Tokens, -TermList, -LeftOver)
+%   parses {',' expr(999)} ['|' expr(999)] ']' and returns a list of terms.
+
+read_list([], _, _) :-
+  syntax_error([', | or ]',expected,in,list], []).
+read_list([Token|S1], Rest, S) :-
+  read_list4(Token, S1, Rest, S).
+
+read_list4(',', S1, [Term|Rest], S) :- !,
+  parse(S1, 999, Term, S2),
+  !,
+  read_list(S2, Rest, S).
+read_list4('|', S1, Rest, S) :- !,
+  parse(S1, 999, Rest, S2),
+  !,
+  expect(']', S2, S).
+read_list4(']', S1, [], S1) :- !.
+read_list4(Token, S1, _, _) :-
+  syntax_error([', | or ]',expected,in,list], [Token|S1]).
+
+
+%   When you had :- op(120, fx, !), op(110, xf, !),
+%   the input [! a !] was incorrectly rejected.  The reason for this
+%   was that the "]" following the "!" should have told us that the
+%   second "!" *couldn't* be a prefix operator, but the postfix
+%   interpretation was never tried.
+
+possible_right_operand([],  -1).
+possible_right_operand([H|T],  Flag) :-
+  possible_right_operand3(H, Flag, T).
+
+possible_right_operand3(var(_,_,_),   1, _).
+possible_right_operand3(number(_),   1, _).
+possible_right_operand3(string(_),   1, _).
+possible_right_operand3(' (',     1, _).
+possible_right_operand3('(',     0, _).
+possible_right_operand3(')',    -1, _).
+possible_right_operand3('[',     0, [']'|_]) :- !.
+possible_right_operand3('[',     1, _).
+possible_right_operand3(']',    -1, _).
+possible_right_operand3('{',     0, ['}'|_]) :- !.
+possible_right_operand3('{',     1, _).
+possible_right_operand3('}',    -1, _).
+possible_right_operand3(',',    -1, _).
+possible_right_operand3('|',    -1, _).
+%possible_right_operand3(atom(_),     0, _).
+possible_right_operand3(atom(_,_),     0, _).
+
+%   The next clause fixes a bug concerning "mop dop(1,2)" where
+%   mop is monadic and dop dyadic with higher Prolog priority.
+
+%peepop([atom(F),'('|S1], [atom(F),'('|S1]) :- !.
+%peepop([atom(F)|S1], [infixop(F,L,P,R)|S1]) :- infixop(F, L, P, R).
+%peepop([atom(F)|S1], [postfixop(F,L,P)|S1]) :- postfixop(F, L, P).
+peepop([atom(F,Pos),'('|S1], [atom(F,Pos),'('|S1]) :- !.
+peepop([atom(F,Pos)|S1], [infixop(F/Pos,L,P,R)|S1]) :- infixop(F, L, P, R).
+peepop([atom(F,Pos)|S1], [postfixop(F/Pos,L,P)|S1]) :- postfixop(F, L, P).
+peepop(S0, S0).
+
+
+%   prefix_is_atom(+TokenList, +Precedence)
+%   is true when the right context TokenList of a prefix operator
+%   of result precedence Precedence forces it to be treated as an
+%   atom, e.g. (- = X), p(-), [+], and so on.
+
+prefix_is_atom([Token|_], Precedence) :-
+  prefix_is_atom(Token, Precedence).
+
+prefix_is_atom(infixop(_,L,_,_), P) :- L >= P.
+prefix_is_atom(postfixop(_,L,_), P) :- L >= P.
+prefix_is_atom(')', _).
+prefix_is_atom(']', _).
+prefix_is_atom('}', _).
+prefix_is_atom('|', P) :- 1100 >= P.
+prefix_is_atom(',', P) :- 1000 >= P.
+prefix_is_atom([],  _).
+
+
+%   exprtl0(+Tokens, +Term, +Prec, -Answer, -LeftOver)
+%   is called by parse/4 after it has read a primary (the Term) which
+%   has not caused the next token to be peeked at.  That is, the
+%   Term was a constant, a variable, a plain compound term, or was
+%   bracketed with () or [] or {}.  An atom which might have been an
+%   operator or a term built up out of operators will result in a call
+%   to exprtl/6 instead.
+%   It checks for following postfix or infix operators.
+
+exprtl0([], Term, _, Term, []).
+exprtl0([Token|S1], Term, Precedence, Answer, S) :-
+  exprtl0_6(Token, Term, Precedence, Answer, S, S1).
+
+exprtl0_6('}', Term, _, Term, ['}'|S1], S1).
+exprtl0_6(']', Term, _, Term, [']'|S1], S1).
+exprtl0_6(')', Term, _, Term, [')'|S1], S1).
+exprtl0_6(',', Term, Precedence, Answer, S, S1) :-
+  (   Precedence >= 1000 ->
+      parse(S1, 1000, Next, S2),
+      !,
+      exprtl(S2, 1000, (Term,Next), Precedence, Answer, S)
+  ;   Answer = Term, S = [','|S1]
+  ).
+exprtl0_6('|', Term, Precedence, Answer, S, S1) :-
+  (   Precedence >= 1100 ->
+      parse(S1, 1100, Next, S2),
+      !,
+      exprtl(S2, 1100, (Term ; Next), Precedence, Answer, S)
+  ;   Answer = Term, S = ['|'|S1]
+  ).
+exprtl0_6(string(S), _, _, _, _, S1) :-
+  cannot_follow(chars, string(S), S1).
+exprtl0_6(number(N), _, _, _, _, S1) :-
+  cannot_follow(number, number(N), S1).
+exprtl0_6('{', Term, Precedence, Answer, S, ['}'|S1]) :- !,
+  exprtl0_atom('{}', Term, Precedence, Answer, S, S1).
+exprtl0_6('{', _, _, _, _, S1) :-
+  cannot_follow(brace, '{', S1).
+exprtl0_6('[', Term, Precedence, Answer, S, [']'|S1]) :- !,
+  exprtl0_atom('[]', Term, Precedence, Answer, S, S1).
+exprtl0_6('[', _, _, _, _, S1) :-
+  cannot_follow(bracket, '[', S1).
+exprtl0_6('(', _, _, _, _, S1) :-
+  cannot_follow(parenthesis, '(', S1).
+exprtl0_6(' (', _, _, _, _, S1) :-
+  cannot_follow(parenthesis, '(', S1).
+exprtl0_6(var(A,B,P), _, _, _, _, S1) :-
+  cannot_follow(variable, var(A,B,P), S1).
+%exprtl0_6(atom(F), Term, Precedence, Answer, S, S1) :-
+exprtl0_6(atom(F,P), Term, Precedence, Answer, S, S1) :-
+  exprtl0_atom(F/P, Term, Precedence, Answer, S, S1).
+
+exprtl0_atom(F/Pos, Term, Precedence, Answer, S, S1) :-
+  ambigop(F, Precedence, L1, O1, R1, L2, O2),
+  !,
+  (   prefix_is_atom(S1, Precedence),
+      !,
+      exprtl([postfixop(F/Pos,L2,O2) |S1], 0, Term, Precedence, Answer, S)
+  ;   exprtl([infixop(F/Pos,L1,O1,R1)|S1], 0, Term, Precedence, Answer, S)
+  ;   exprtl([postfixop(F/Pos,L2,O2) |S1], 0, Term, Precedence, Answer, S)
+  ).
+exprtl0_atom(F/Pos, Term, Precedence, Answer, S, S1) :-
+  infixop(F, L1, O1, R1),
+  !,
+  exprtl([infixop(F/Pos,L1,O1,R1)|S1], 0, Term, Precedence, Answer, S).
+exprtl0_atom(F/Pos, Term, Precedence, Answer, S, S1) :-
+  postfixop(F, L2, O2),
+  !,
+  exprtl([postfixop(F/Pos,L2,O2) |S1], 0, Term, Precedence, Answer, S).
+exprtl0_atom(X, _, _, _, _, S1) :- !,
+%  syntax_error([non-operator,X,follows,expression], [atom(X)|S1]).
+  syntax_error([non-operator,X,follows,expression], [atom(X,_)|S1]).
+
+cannot_follow(Type, Token, Tokens) :-
+  syntax_error([Type,follows,expression], [Token|Tokens]).
+
+
+
+
+
+%   exprtl(+S0, +C, +Term, +Precedence, -Answer, -S)
+%   is called by after_prefix_op or exprtl0 when the first token of
+%   S0 has already been peeked at.  Basically, it parses
+%  { <infixop> <operand> | <postfixop> }*
+
+exprtl([], _, Term, _, Term, []).
+exprtl([Token|Tokens], C, Term, Precedence, Answer, S) :-
+  exprtl_7(Token, C, Term, Precedence, Answer, S, Tokens).
+
+exprtl_7(infixop(F/Pos,L,O,R), C, Term, Precedence, Answer, S, S1) :-
+  Precedence >= O, C =< L,
+  !,
+  parse(S1, R, Other, S2),
+  %Expr =.. [F,Term,Other], /*!,*/
+  %steve
+  Expr =.. [F,Pos,Term,Other], /*!,*/
+  exprtl(S2, O, Expr, Precedence, Answer, S).
+
+exprtl_7(postfixop(F/Pos,L,O), C, Term, Precedence, Answer, S, S1) :-
+  Precedence >= O, C =< L,
+  !,
+  Expr =.. [F,Pos,Term],
+  peepop(S1, S2),
+  exprtl(S2, O, Expr, Precedence, Answer, S).
+
+exprtl_7(',', C, Term, Precedence, Answer, S, S1) :-
+  Precedence >= 1000, C < 1000,
+  !,
+  parse(S1, 1000, Next, S2), /*!,*/
+  exprtl(S2, 1000, (Term,Next), Precedence, Answer, S).
+
+exprtl_7('|', C, Term, Precedence, Answer, S, S1) :-
+  Precedence >= 1100, C < 1100,
+  !,
+  parse(S1, 1100, Next, S2), /*!,*/
+  exprtl(S2, 1100, (Term ; Next), Precedence, Answer, S).
+
+exprtl_7(Token, _, Term, _, Term, [Token|Tokens], Tokens).
+
+
+%   This business of syntax errors is tricky.  When an error is detected,
+%   we have to write out a message.  We also have to note how far it was
+%   to the end of the input, and for this we are obliged to use the data-
+%   base.  Then we fail all the way back to parse(), and that prints the
+%   input list with a marker where the error was noticed.  If subgoal_of
+%   were available in compiled code we could use that to find the input
+%   list without hacking the data base.  The really hairy thing is that
+%   the original code noted a possible error and backtracked on, so that
+%   what looked at first sight like an error sometimes turned out to be
+%   a wrong decision by the parser.  This version of the parser makes
+%   fewer wrong decisions, and my goal was to get it to do no backtracking
+%   at all.  This goal has not yet been met, and it will still occasionally
+%   report an error message and then decide that it is happy with the input
+%   after all.  Sorry about that.
+
+
+syntax_error(_Message, _List) :-
+/*
+  current_output(CurrentOutput),
+  set_output(user_error),
+  formatError('~N**', []),
+  display_list(Message),
+  set_output(CurrentOutput),
+  length(List, Length),
+  recorda(syntax_error, length(Length), _),
+*/
+  !, fail.
+
+/*
+display_list([]) :-
+  nl.
+display_list([Head|Tail]) :- !,
+  put_code(" "),
+  display_token(Head),
+  display_list(Tail).
+*/
+
+syntax_error1(_List) :-
+/*
+  recorded(syntax_error, length(AfterError), Ref),
+  erase(Ref),
+  length(List, Length),
+  BeforeError is Length-AfterError,
+  current_output(CurrentOutput),
+  set_output(user_error),
+  with_output_to_chars(display_list(List, BeforeError),Chars),
+  name(Err_out, Chars),
+  print(Err_out),  
+  assert(error_msg_syntax(List,BeforeError, Err_out)),  
+  set_output(CurrentOutput),
+*/
+  !, fail.
+
+/*
+display_list(X, 0) :- !,
+  write('<<here>> '),
+  display_list(X, 99999).
+display_list([Head|Tail], BeforeError) :- !,
+  display_token(Head),
+  put_code(" "),
+  Left is BeforeError-1,
+  display_list(Tail, Left).
+display_list([], _) :-
+  nl.
+
+%display_token(atom(X))   :- !,  writeq(X).
+display_token(atom(X,_))   :- !,  writeq(X).
+display_token(var(_,X,_))   :- !,  write(X).
+display_token(number(X)) :- !,  write(X).
+display_token(string(X)) :- !,  Q is """", put_code(Q), display_string(X, Q).
+display_token(X)   :-  write(X).
+
+display_string([], Quote) :-
+  put_code(Quote).
+display_string([Quote|Chars], Quote) :- !,
+  put_code(Quote), put_code(Quote),    % later, put_code(0'\), put_code(Quote)
+  display_string(Chars, Quote).
+display_string([Char|Chars], Quote) :-
+  put_code(Char),
+  display_string(Chars, Quote).
+*/
+
+%.  The original public-domain code was written to go with a similarly
+%   public-domain version of op/3 and current_op/3 where the following
+%   three tables were the primary reality.  Whether they are or aren't,
+%   only current_op/3 is (currently) directly available to customers.
+
+prefixop(F, O, Q) :-
+  (   current_op(O, fx, F) -> Q is O-1
+  ;   current_op(O, fy, F) -> Q is O
+  ).
+
+postfixop(F, P, O) :-
+  (   current_op(O, xf, F) -> P is O-1
+  ;   current_op(O, yf, F) -> P is O
+  ).
+
+infixop(F, P, O, Q) :-
+  (   current_op(O, xfy, F) -> P is O-1, Q is O
+  ;   current_op(O, xfx, F) -> P is O-1, Q is P
+  ;   current_op(O, yfx, F) -> Q is O-1, P is O
+  ).
+
+%   ambigop(Symbol, Precedence, L1, O1, R1, L2, O2)
+%   is true when Symbol has an infix (L1,O1,R1) and a postfix (L2,O2)
+%   definition both of which are compatible with Precedence.
+%   I assume here that postfixop and infixop have been coded so that
+%   they are determinate when called with a constant first argument.
+
+ambigop(F, Precedence, L1, O1, R1, L2, O2) :-
+  postfixop(F, L2, O2),
+  O2 =< Precedence,
+  infixop(F, L1, O1, R1),
+  O1 =< Precedence.
+
+% -----------------------------------------------------------------
+%   Package: tokens
+%   Author : Richard A. O'Keefe
+%   Updated: 29 Aug 1989
+%   Defines: a public-domain tokeniser in reasonably standard Prolog.
+
+/*
+:- module(tokens, [
+  read_tokens/1,
+  read_tokens/2,
+        get_current_position/1
+   ]).
+*/
+
+/*  This tokeniser is meant to complement the library READ routine.
+    It recognises Dec-10 Prolog with the following exceptions:
+
+  %( is not accepted as an alternative to {
+
+  %) is not accepted as an alternative to }
+
+  NOLC convention is not supported (read_name could be made to do it)
+
+  ,.. is not accepted as an alternative to | (hooray!)
+
+  large integers are not read in as xwd(Top18Bits,Bottom18Bits)
+
+  After a comma, "(" is read as ' (' rather than '('.  This does the
+  parser no harm at all, and the Dec-10 tokeniser's behaviour here
+  doesn't actually buy you anything.  This tokeniser guarantees never
+  to return '(' except immediately after an atom, yielding ' (' every
+  other where.
+
+    Some (KL-10, DEC-10 Prolog v3.53) times might be of interest.
+    Applied to an earlier version of this file:
+  this code took      1.66 seconds
+  the Dec-10 tokeniser took  1.28 seconds
+  A Pascal version took    0.96 seconds
+
+    Some more (Sun-3/50M, Quintus Prolog 2.4.2) times.
+  Test file    tokens.pl  read.pl    long.pl
+  This code    5.25 sec  5.57 sec  15.02 sec
+  Quintus tokeniser  3.07 sec  2.97 sec   7.90 sec
+  The "ppl" utility  0.40 sec  0.50 sec   1.50 sec
+  ppl + hsearch for ids  0.60 sec  0.70 sec   2.20 sec
+    The main factor explaining the greater speed of the Quintus tokeniser
+    is that it reads most of the characters in C, thus making fewer trips
+    across the C interface.  It turns out that even in the built-in
+    tokeniser, the overhead from the existing I/O system is
+  Get0 time    2.57 sec  2.43 sec   6.60 sec
+  Old I/O overhead  0.68 sec  0.68 sec   1.85 sec
+  C interface overhead  0.80 sec  1.25 sec   3.25 sec
+  New I/O total saving:  1.48 sec  1.93 sec   5.10 sec
+  This code MAY be  3.78 sec  3.64 sec   9.92 sec
+  Quintus code MAY be  2.39 sec  2.29 sec   6.05 sec
+  Quintus/ppl+hsearch  3.98 times  3.27 times   2.74 times
+    The savings for this code may be even greater, as a Prolog call and
+    the corresponding stack frame creation will be avoided.  It is worth
+    noting that this doesn't look as though it will be a good idea to
+    replace the existing Quintus tokeniser.  The appropriate C comparison
+    is ppl + hsearch (a hash table lookup) applied to atoms and variable
+    names.  Given that these numbers are significant to 1 figure, if that,
+    a factor of 3..4 times slower than C code doesn't sound too bad.
+  
+    These figures predict that the Quintus tokeniser with the future 
+    new I/O code will be about 30% faster than it is now, and about
+    1.6 times as fast as this tokeniser will be then.
+    By a curious coincidence, read/1 is now about 1.6 times as fast as
+    portable_read/1 is now.
+
+    The Dec-10 tokeniser was called via the old RDTOK interface, with
+    which this file is compatible.  One reason for the difference in
+    speed is the way variables are looked up: this code uses a linear
+    list, while the Dec-10 tokeniser uses some sort of tree.  The Pascal
+    version is the program WLIST which lists "words" and their frequencies.
+    It uses a hash table.  Another difference is the way characters are
+    classified: the Dec-10 tokeniser and WLIST have a table which maps
+    ASCII codes to character classes, and don't do all this comparison
+    and and memberchking.  We could do that without leaving standard Prolog,
+    but what do you want from one evening's work?
+
+    Changes:
+  integers can have underscores in them.
+  characters in 0'x, "x", and 'x' can be escaped as in C or PopLog.
+  So in 'foo\t%t\n' the \t and \n are now single characters.
+  Radix notation is no longer exactly like DEC-10 Prolog v3.53.
+  The radix may be any number of digits, e.g. 0016'deed.
+
+    In order to make this file independent of whether character-escapes
+    are enabled or not, the magic numbers
+  9  (TAB)  and
+  92  ( \ )
+    are used.
+*/
+
+%sccs_id('"@(#)89/08/29 tokens.pl    33.1"').
+
+
+%   read_tokens(-TokenList)
+%   returns a list of tokens.  The difference between it and
+%   read_tokens/2 is that it doesn't bother to return the dictionary.
+%   Now that read_tokens/2 sorts the dictionary, this can be a useful
+%   saving.  Note that var(_,_) tokens still contain the variable name,
+%   so it is possible to reconstruct the dictionary if you really need it.
+
+
+
+
+read_tokens1(TokenList) :-
+  get_code(C1),
+  read_tokens(C1, _X, ListOfTokens),
+  !,
+  TokenList = ListOfTokens.
+read_tokens1([atom(end_of_file,0)]).
+
+%   read_tokens2(TokenList, Dictionary)
+%   returns a list of tokens, and a dictionary of VarName=Variable pairs
+%   in standard order, where the VarNames are atoms and the variables
+%   are all the named variables among the tokens.
+%   This predicate "primes" read_tokens/3 with the initial blank, and
+%   checks for end of file.
+%   The way end of file is handled is that everything else FAILS when it
+%   hits character -1, sometimes printing a warning.  It might have been
+%   an idea to return the atom 'end_of_file' instead of the same token list
+%   that you'd have got from reading "end_of_file. ", but (1) this file is
+%   for compatibility, and (b) there are good practical reasons for wanting
+%   this behaviour.
+
+read_tokens2(TokenList, Dictionary) :-
+  get_code(C1),
+  read_tokens(C1, Dict, ListOfTokens),
+  terminate_list(Dict),    
+  !,        
+  %sort(Dict, Dictionary),    
+  Dictionary = Dict,
+  TokenList = ListOfTokens.  
+read_tokens2([atom(end_of_file,0)], []).  
+
+terminate_list([]).
+terminate_list([_|Tail]) :-
+  terminate_list(Tail).
+
+/* We hand-modify the compiled code to do tail recursion.
+read_tokens(C1, Dict, Tokens) :-
+    (  C1 =< " " ->      % layout: CR, LF, TAB, space, &c
+  C1 >= 0,      % FAIL at end of file
+  get_code(C2),
+  read_tokens(C2, Dict, Tokens)
+    ;  C1 >= "a", C1 =< "z" ->    % plain identifier
+  read_identifier(C1, Dict, Tokens)
+    ;  C1 >= "A", C1 =< "Z" ->    % variable name
+  read_variable(C1, Dict, Tokens)
+    ;  C1 >= "0", C1 =< "9" ->
+  read_number(C1, Dict, Tokens)
+    ;   C1 < 127 ->      % special character
+  read_special(C1, Dict, Tokens)
+    ;   C1 =< 160 ->      % DEL or unassigned control
+  get_code(C2),
+  read_tokens(C2, Dict, Tokens)
+    ;   C1 >= 223, C1 =\= 247 ->  % ISO lower case letter
+  read_identifier(C1, Dict, Tokens)
+    ;  C1 >= 192, C1 =\= 215 ->  % ISO upper case letter
+  read_variable(C1, Dict, Tokens)
+    ;  C1 =\= 170, C1 =\= 186 ->  % ISO symbol char
+  read_symbol(C1, Dict, Tokens)
+    ;           % _a_ or _o_ ordinal characters
+  read_identifier(C1, Dict, Tokens)
+    ).
+*/
+
+read_special(0'_, Dict, Tokens) :-  % underscore; starts variables
+  read_variable(0'_, Dict, Tokens).
+read_special(247, Dict, Tokens) :-  % -:- (division sign)
+  read_symbol(247, Dict, Tokens).
+read_special(215, Dict, Tokens) :-  % x (multiplication sign)
+  read_symbol(215, Dict, Tokens).
+
+  
+  
+read_special(0'%, Dict, [comment(StartPos, EndPos)|Tokens]) :-    %  %comment
+%read_special(0'%, Dict, Tokens) :-    %  %comment
+  get_current_position(StartPos),
+  
+  repeat,          %  skip characters to any
+      get_code(Ch),        %  line terminator
+      Ch < " ", Ch =\= 9 /*TAB*/,    %  control char, not tab
+  !,          %  stop when we find one
+  Ch \== -1,        %  fail on EOF
+%  comment(Comm),
+  get_current_position(EndPos),
+  get_code(NextCh),
+  read_tokens(NextCh, Dict, Tokens).
+read_special(0'/, Dict, T) :-    %  /*comment?
+  get_code(C2),
+  (   C2 =:= "*" ->      % is /*comment*/
+      T = [comment(StartPos, EndPos)|Tokens],
+      get_current_position(StartPos1),
+      StartPos is StartPos1 -1,     
+      read_solidus(0' , NextCh),
+      get_current_position(EndPos),
+      
+      
+      read_tokens(NextCh, Dict, Tokens)
+  ;/* C2 =\= "*" */      % begins symbol
+      T = Tokens,      
+      rest_symbol(C2, Chars, NextCh),
+      read_after_atom4(NextCh, Dict, Tokens, [0'/|Chars])
+  ).
+read_special(0'!, Dict, [atom(!,Pos)|Tokens]) :-  %  This is a special case so
+  get_current_position(Pos),
+  get_code(NextCh),        %  that "!." is two tokens
+  read_after_atom(NextCh, Dict, Tokens).  %  It could be cleverer.
+read_special(0'(, Dict, [' ('|Tokens]) :-  %  NB!!!  "(" turns into
+  get_code(NextCh),        %  the token ' ('.
+  read_tokens(NextCh, Dict, Tokens).
+read_special(0'), Dict, [')'|Tokens]) :-
+  get_code(NextCh),
+  read_tokens(NextCh, Dict, Tokens).
+read_special(0',, Dict, [','|Tokens]) :-
+  get_code(NextCh),
+  read_tokens(NextCh, Dict, Tokens).
+%   ; is not a punctuation mark but an atom (e.g. you can :-op declare it).
+read_special(0';, Dict, [atom(;,Pos)|Tokens]) :-  
+  get_current_position(Pos),
+  get_code(NextCh),        
+  read_after_atom(NextCh, Dict, Tokens).  
+read_special(0'[, Dict, ['['/Pos|Tokens]) :-
+  get_current_position(Pos),
+  get_code(NextCh),
+  read_tokens(NextCh, Dict, Tokens).
+read_special(0'], Dict, [']'/Pos|Tokens]) :-
+  get_current_position(Pos),
+
+  get_code(NextCh),
+  read_after_atom(NextCh, Dict, Tokens).
+read_special(0'{, Dict, ['{'/Pos|Tokens]) :-
+  get_current_position(Pos),
+  get_code(NextCh),
+  read_tokens(NextCh, Dict, Tokens).
+read_special(0'|, Dict, ['|'|Tokens]) :-
+  get_code(NextCh),
+  read_tokens(NextCh, Dict, Tokens).
+read_special(0'}, Dict, ['}'|Tokens]) :-
+  get_code(NextCh),
+  read_after_atom(NextCh, Dict, Tokens).
+read_special(0'., Dict, Tokens) :-    %  full stop
+  get_code(NextCh),        %  or possibly .=. &c
+  read_fullstop(NextCh, Dict, Tokens).
+read_special(0'", Dict, [string(Chars)|Tokens]) :-  %  "string"
+  read_string(Chars, 0'", NextCh),
+  read_tokens(NextCh, Dict, Tokens).
+read_special(0'', Dict, Tokens) :-    %  'atom'
+  read_string(Chars, 0'', NextCh),
+  read_after_atom4(NextCh, Dict, Tokens, Chars).
+read_special(0'#, Dict, Tokens) :-
+  read_symbol(0'#, Dict, Tokens).
+read_special(0'$, Dict, Tokens) :-
+  read_symbol(0'$, Dict, Tokens).
+read_special(0'&, Dict, Tokens) :-
+  read_symbol(0'&, Dict, Tokens).
+read_special(0'*, Dict, Tokens) :-
+  read_symbol(0'*, Dict, Tokens).
+read_special(0'+, Dict, Tokens) :-
+  read_symbol(0'+, Dict, Tokens).
+read_special(0'-, Dict, Tokens) :-
+  read_symbol(0'-, Dict, Tokens).
+read_special(0':, Dict, Tokens) :-
+  read_symbol(0':, Dict, Tokens).
+read_special(0'<, Dict, Tokens) :-
+  read_symbol(0'<, Dict, Tokens).
+read_special(0'=, Dict, Tokens) :-
+  read_symbol(0'=, Dict, Tokens).
+read_special(0'>, Dict, Tokens) :-
+  read_symbol(0'>, Dict, Tokens).
+read_special(0'?, Dict, Tokens) :-
+  read_symbol(0'?, Dict, Tokens).
+read_special(0'@, Dict, Tokens) :-
+  read_symbol(0'@, Dict, Tokens).
+read_special( 92, Dict, Tokens) :-    % 92 is "\\"
+  read_symbol( 92, Dict, Tokens).
+read_special(0'^, Dict, Tokens) :-
+  read_symbol(0'^, Dict, Tokens).
+read_special(0'`, Dict, Tokens) :-
+  read_symbol(0'`, Dict, Tokens).
+read_special(0'~, Dict, Tokens) :-
+  read_symbol(0'~, Dict, Tokens).
+
+
+%   read_symbol(+C1, +Dict, -Tokens)
+%   C1 is the first character of an atom made up of the following characters:
+%  #$&*+-./:<=>?\^'~ (which are ASCII codes) and the ISO 8859/1 codes
+%  215 (x) 247 (-:-) 161-169, 171-185, 187-191
+
+read_symbol(C1, Dict, Tokens) :-
+  get_code(C2),
+  rest_symbol(C2, Chars, NextCh),  % might read 0 chars
+  read_after_atom4(NextCh, Dict, Tokens, [C1|Chars]).
+
+
+%   rest_symbol(+C2, -String, -NextCh)
+%   reads the second and subsequence characters of an atom made up of
+%   "symbol" characters.  It returns those characters as the list
+%   String, and the following character as NextCh.  Note that it need
+%   not read any characters at all, e.g. Ch might be " ".
+
+rest_symbol(C2, [C2|Chars], LastCh) :-
+  (   C2 > 160 -> C2 < 192, C2 =\= 186, C2 =\= 170
+  ;   symbol_char(C2)
+  ),
+  !,
+  get_code(NextCh),
+  rest_symbol(NextCh, Chars, LastCh).
+rest_symbol(C2, [], C2).
+
+symbol_char(0'#).
+symbol_char(0'$).
+symbol_char(0'&).
+symbol_char(0'*).
+symbol_char(0'+).
+symbol_char(0'-).
+symbol_char(0'.). % yes, +./* is a legal atom
+symbol_char(0'/).
+symbol_char(0':).
+symbol_char(0'<).
+symbol_char(0'=).
+symbol_char(0'>).
+symbol_char(0'?).
+symbol_char(0'@).
+symbol_char(92 /* \ */).
+symbol_char(0'^).
+symbol_char(0'`). % CHAT-80 uses `` as an atom.
+symbol_char(0'~).
+
+
+get_current_position(Pos) :-
+/*
+  current_input(S), character_count(S,Pos).
+  */
+  Pos = 0.
+
+read_after_atom4(Ch, Dict, [atom(Atom,Pos)|Tokens], Chars) :-
+  /*
+  current_input(S), character_count(S,X), length(Chars,L),Pos is X - L,
+  */
+  Pos = 0,
+  atom_codes(Atom, Chars),
+  read_after_atom(Ch, Dict, Tokens).
+
+%   The only difference between read_after_atom3(Ch, Dict, Tokens) and
+%   read_tokens/3 is what they do when Ch is "(".  read_after_atom
+%   finds the token to be '(', while read_tokens finds the token to be
+%   ' ('.  This is how the parser can tell whether <atom> <paren> must
+%   be an operator application or an ordinary function symbol application.
+%   See the public-domain library file READ.PL for details.
+
+read_after_atom(0'(, Dict, ['('|Tokens]) :- !,
+  get_code(NextCh),
+  read_tokens(NextCh, Dict, Tokens).
+read_after_atom(Ch, Dict, Tokens) :-
+  read_tokens(Ch, Dict, Tokens).
+
+
+
+
+%   read_string(Chars, Quote, NextCh)
+%   reads the body of a string delimited by Quote characters.
+%   The result is a list of ASCII codes.  There are two complications.
+%   If we hit the end of the file inside the string this predicate FAILS.
+%   It does not return any special structure.  That is the only reason
+%   it can ever fail.  The other complication is that when we find a Quote
+%   we have to look ahead one character in case it is doubled.  Note that
+%   if we find an end-of-file after the quote we *don't* fail, we return
+%   a normal string and the end of file character is returned as NextCh.
+%   If we were going to accept C-like escape characters, as I think we
+%   should, this would need changing (as would the code for 0'x).  But
+%   the purpose of this module is not to present my ideal syntax but to
+%   present something which will read present-day Prolog programs.
+
+read_string(Chars, Quote, NextCh) :-
+  get_code(Ch),
+  read_char(Ch, Quote, Char, Next),
+  rest_string5(Char, Next, Chars, Quote, NextCh).
+
+
+rest_string5(-1, NextCh, [], _X, NextCh) :- !.    % string ended
+rest_string5(Char, Next, [Char|Chars], Quote, NextCh) :-
+  read_char(Next, Quote, Char2, Next2),
+  rest_string5(Char2, Next2, Chars, Quote, NextCh).
+
+%  This table is for ASCII.  On Xerox Lisp systems, \n maps to
+%  13 (CR).  The whole table needs replacing in EBCDIC systems,
+%  in which the assumption that A..Z and a..z are contiguous
+%  blocks also needs correcting.
+
+escape_char(0'n, 10).    % \n = NewLine
+escape_char(0'N, 10).    % \N = NewLine
+escape_char(0't,  9).    % \t = Tab
+escape_char(0'T,  9).    % \T = Tab
+escape_char(0'r, 13).    % \r = Return
+escape_char(0'R, 13).    % \R = Return
+escape_char(0'v, 11).    % \v = Vertical tab
+escape_char(0'V, 11).    % \V = Vertical tab
+escape_char(0'b,  8).    % \b = Backspace
+escape_char(0'B,  8).    % \B = Backspace
+escape_char(0'f, 12).    % \f = FormFeed
+escape_char(0'F, 12).    % \F = FormFeed
+escape_char(0'e, 27).    % \e = Escape
+escape_char(0'E, 27).    % \E = Escape
+escape_char(0'd,127).    % \d = Delete
+escape_char(0'D,127).    % \D = Delete
+escape_char(0's, 32).    % \s = visible Space
+escape_char(0'S, 32).    % \S = visible Space
+escape_char(0'z, -1).    % \z = end of file
+escape_char(0'Z, -1).    % \Z = end of file
+
+
+
+%   read_variable(+C1, +Dict, -Tokens)
+%   C1 is the first character of a variable name.  If the whole
+%   variable name is "_", this is an anonymous variable, not identical
+%   to any other variable.  Otherwise, the variable and its name are
+%   looked up in (or added to) the dictionary, which is an improper list.
+%   This is the only place that read_lookup/2 is called.
+
+%%steve -- added pos info to var
+read_variable(C1, Dict, [var(Var,Name,StartPos)|Tokens]) :-
+  get_current_position(StartPos),
+  read_name(C1, Chars, NextCh),
+  
+  atom_codes(Name, Chars),
+  (   Name == '_' -> true
+  ;   read_lookup(Dict, Name, Var)
+  ),
+  read_after_atom(NextCh, Dict, Tokens).
+
+read_lookup([N=V|L], Name, Var) :-
+  (   N = Name -> V = Var
+  ;   read_lookup(L, Name, Var)
+  ).
+
+
+%   read_solidus(+Ch, -LastCh)
+%   is called when we have read the "/" and "*" that open a PL/I-style
+%   comment.  It skips the rest of the comment.  We have to take great
+%   care to handle end of file inside a comment; if the end-of-file is
+%   is reported, we return -1 as LastCh,  while a space is returned if
+%   the "*" and "/" that terminate the comment are found, and the next
+%   character is left unread.  That might be changed.
+
+read_solidus(Ch, LastCh) :-
+    (  Ch =:= 0'* ->    % maybe end of comment
+  get_code(NextCh),
+  (   NextCh =:= 0'/ ->  % end of comment*/ found
+      get_code(LastCh)    % skip over any layout following
+  ;   read_solidus(NextCh, LastCh)
+  )
+    ;  Ch =\= -1 ->    % ordinary comment character
+  get_code(NextCh),
+  read_solidus(NextCh, LastCh)
+    ;        % end of file
+  LastCh = Ch,
+  formatError(user_error, '~N** end of file in /*comment~n', [])
+    ).
+
+
+%   read_identifier(+C1, +Dict, -Tokens)
+%   reads an atom which begins with a lower case letter C1 and
+%   continues with letters, digits, and underscores.
+
+read_identifier(C1, Dict, Tokens) :-
+  read_name(C1, Chars, NextCh),
+  read_after_atom4(NextCh, Dict, Tokens, Chars).
+
+
+%   read_name(+C1, -Chars, -LastCh)
+%   reads a sequence of letters, digits, and underscores, where the
+%   last character read was C1 and it is known that C1 is to be
+%   included in the result.  The desired characters are returned as
+%   the list Chars, and the next character as LastCh.
+%   This version has been tuned, oy, has it been tuned!
+%   A table-driven version is nearly as fast in Prolog.
+
+read_name(C1, [C1|Chars], LastCh) :-
+    get_code(C2),
+    (   C2 >= "a" ->
+  (  C2 =< "z" ->      % ASCII lower case letter
+      read_name(C2, Chars, LastCh)
+  ;   C2 < 192, C2 \/ 16 =\= 186 ->  % {|}~, ISO 8859/1 symbols
+      Chars = [], LastCh = C2
+  ;   C2 \/ 32 =:= 247 ->    % times or divide-by chars
+      Chars = [], LastCh = C2
+  ;          % ISO 8859/1 top letters
+      read_name(C2, Chars, LastCh)
+  )
+    ;   C2 >= "A" ->
+  (  C2 > "Z", C2 =\= "_" ->    % [\]^`
+      Chars = [], LastCh = C2
+  ;          % ASCII upper case or "_"
+      read_name(C2, Chars, LastCh)
+      )
+    ;   (  C2 >= "0", C2 =< "9" ->    % ASCII digits
+      read_name(C2, Chars, LastCh)
+  ;          % other characters
+      Chars = [], LastCh = C2
+  )
+    ).
+
+
+%   read_fullstop(Char, Dict, Tokens)
+%   looks at the next character after a full stop.  There are
+%   three cases:
+%  (a) the next character is an end of file.  We treat this
+%      as an unexpected end of file.  The reason for this is
+%      that we HAVE to handle end of file characters in this
+%      module or they are gone forever; if we failed to check
+%      for end of file here and just accepted .<EOF> like .<NL>
+%      the caller would have no way of detecting an end of file
+%      and the next call would abort.
+%  (b) the next character is a layout character.  This is a
+%      clause terminator.
+%  (c) the next character is anything else.  This is just an
+%      ordinary symbol and we call read_symbol to process it.
+
+read_fullstop(Ch, Dict, Tokens) :-
+  (   Ch =< "9", Ch >= "0" ->
+      Tokens = [number(Number)|Tokens1],
+      read_float(Number, Dict, Tokens1, "0", Ch)
+  ;   Ch > " " ->    % ordinary token starting with "."
+      rest_symbol(Ch, Chars, NextCh),
+      read_after_atom4(NextCh, Dict, Tokens, [0'.|Chars])
+  ;   Ch >= 0 ->    % END OF CLAUSE
+      Tokens = []
+  ;      % END OF FILE
+      formatError(user_error, '~N** end of file just after full stop~n', []),
+      fail
+  ).
+
+
+
+%   read_float(N, C, Dict, Tokens)
+%   is called when we have parsed <digit>* "." <digit>; N is the integer
+%   value of the characters preceding the decimal point, and C is the
+%   first digit after the decimal point.
+
+read_float(Number, Dict, Tokens, Digits, Digit) :-
+  prepend(Digits, Chars, Rest),
+  read_float4(Digit, Rest, NextCh, Chars),
+  number_codes(Number, Chars),
+  read_tokens(NextCh, Dict, Tokens).
+
+% prepend([]) --> ".".
+prepend([], [46|X], X).
+% prepend([C|Cs]) --> [C], prepend(Cs).
+prepend([C|Cs], [C|X], Y) :- prepend(Cs, X, Y).
+
+read_float4(C1, [C1|Chars], NextCh, Total) :-
+  get_code(C2),
+  (   C2 >= "0", C2 =< "9" ->
+      read_float4(C2, Chars, NextCh, Total)
+  ;   C2\/32 =:= "e" ->
+      get_code(C3),
+      (   C3 =:= "-" -> get_code(C4), Chars = [C2,0'-|More]
+      ;   C3 =:= "+" -> get_code(C4), Chars = [C2|More]
+      ;          C4 = C3,  Chars = [C2|More]
+      ),
+      (   C4 >= "0", C4 =< "9" ->
+    read_exponent(C4, More, NextCh)
+      ;   More = "",
+    formatError(user_error, '~N** Missing exponent in ~s~n', [Total]),
+    fail
+      ;   More = "0", NextCh = C4
+      )
+  ;   Chars = [], NextCh = C2
+  ).
+
+read_exponent(C1, [C1|Chars], NextCh) :-
+  get_code(C2),
+  (   C2 >= "0", C2 =< "9" ->
+      read_exponent(C2, Chars, NextCh)
+  ;   Chars = [], NextCh = C2
+  ).
+
+
+%   read_number(+C1, +Dict, -Tokens)
+%   C1 is the digit which begins the number.
+
+read_number(C1, Dict, [number(Number)|Tokens]) :-
+  read_number4(C1, C2, 0, N),
+  (   C2 =:= 0'' ->
+      (   N >= 2, N =< 36 ->
+    read_based(N, 0, Number, C)
+      ;   N =:= 0 ->
+    get_code(C3),
+    read_char(C3, -1, Number, C)
+      ;   formatError(user_error, '~N** ~d'' read as ~d ''~n', [N,N]),
+    Number = N, C = C2
+      ),
+      read_tokens(C, Dict, Tokens)
+  ;   C2 =:= 0'. ->
+      get_code(C3),
+      (   C3 >= "0", C3 =< "9" ->
+    number_codes(N, Digits),
+    read_float(Number, Dict, Tokens, Digits, C3)
+      ;   Number = N,
+    read_fullstop(C3, Dict, Tokens)
+      )
+  ;   Number = N,
+      read_tokens(C2, Dict, Tokens)
+  ).
+
+
+%   read_number(+C0, -C, +N0, -N)
+%   read a decimal integer.
+
+read_number4(C0, C, N0, N) :-
+    (  C0 >= "0", C0 =< "9" ->
+  N1 is N0*10 - "0" + C0,
+  get_code(C1),
+  read_number4(C1, C, N1, N)
+    ;   C0 =:= 0'_ ->
+  get_code(C1),
+  read_number4(C1, C, N0, N)
+    ;   C = C0, N = N0
+    ).
+
+
+%   read_based(+Base, +N0, -N, -LastCh)
+%   read an integer in base Base.
+
+read_based(Base, N0, N, C) :-
+  get_code(C1),
+  (   C1 >= "0", C1 =< "9" -> Digit is C1-"0"
+  ;   C1 >= "A", C1 =< "Z" -> Digit is C1-("A"-10)
+  ;   C1 >= "a", C1 =< "z" -> Digit is C1-("a"-10)
+  ;   Digit is 99
+  ),
+  (   Digit < Base ->
+      N1 is N0*Base + Digit,
+      read_based(Base, N1, N, C)
+  ;   C1 =:= "_" ->
+      read_based(Base, N0, N, C)
+  ;   N = N0, C = C1
+  ).
+
+
+%   read_char(C1, Quote, Char, C2)
+%   reads a single `character' from a string, quoted atom, or character
+%   constant.  C1 is the first character it is to look at, and has been
+%   read already.  Quote is the surrounding quotation mark, which is "
+%   for strings, ' for quoted atoms, and the radix character (also ')
+%   for character constants.  A Dec-10 Prolog incompatibility is that
+%   it does not allow newline characters in strings unless they are
+%   preceded by an escape character.  As reading an extended character
+%   would sometimes read one character too many, it is made to do so
+%   always, and to return the first character which does not belong in
+%   the character as C2.  When we have hit the end of the string, we
+%   return Char = -1 (which does not necessarily mean that we have hit
+%   the end of the source file, look at C2 for that).
+
+read_char(Char, Quote, Result, Next) :-
+    (  Char =:= 92 /* \ */ ->
+  get_code(C1),
+  (   C1 < 0 ->
+    formatError(user_error, '~N** end of file in ~cquoted~c~n',
+           [Quote,Quote]),
+    Result = -1, Next = C1
+  ;   C1 =< " " ->
+    /* \<layout> is skipped */
+    get_code(C2),
+    read_char(C2, Quote, Result, Next)
+  ;   C1\/32 =:= "c" ->
+    /* \c<layout>* is skipped; to get a blank after this */
+    /* do e.g. "...\c      \ <space>" where the "\ " ends */
+    /* the skipping and the NEXT blank is taken.  */
+    get_code(C2),
+    read_char(C2, Quote, Result, Next)
+  ;   C1 =< "7", C1 >= "0" ->
+    /* \<1-3 octal digits> */
+    /* hairy bit: \1234 is S4 */
+    get_code(C2),
+    (   C2 =< "7", C2 >= "0" ->
+        get_code(C3),
+        (   C3 =< "7", C3 >= "0" ->
+      get_code(Next),
+      Result is (C1*8+C2)*8+C3 - 73*"0"
+        ;   Next = C3,
+      Result is (C1*8+C2) - 9*"0"
+        )
+    ;   Next = C2,
+        Result is C1-"0"
+    )
+  ;   C1 =:= "^" ->
+    get_code(C2),
+    (   C2 < 0 ->
+        formatError(user_error, '~N** end of file in ~c..~c^..~c~n',
+            [Quote,92 /* \ */,Quote]),
+        Result = -1, Next = C2
+    ;   C2 =:= "?" ->
+        Result = 127,  % \^? = DEL
+        get_code(Next)
+    ;   Result is C2/\31,  % \^X -> control-X
+        get_code(Next)
+    )
+  ;   escape_char(C1, Result) ->
+    get_code(Next)
+  ;   /* otherwise */
+    Result = C1,    % probably "'", '"',  or \ itself
+    get_code(Next)
+  )
+
+    ;  Char =:= Quote ->
+  get_code(Ch),
+  (   Ch =:= Quote ->
+      Result = Quote,
+      get_code(Next)
+  ;   Result = -1, Next = Ch
+  )
+
+    ;  Char < " ", Char =\= 9 /*TAB*/, Char =\= 10 /* new line */, Char =\= 13 /* CR */ ->
+  Result = -1, Next = Char,
+  formatError(user_error,
+      '~N** Strange character ~d ends ~ctoken~c~n',
+      [Char, Quote, Quote])
+
+    ;
+  Result = Char,
+  get_code(Next)
+    ).

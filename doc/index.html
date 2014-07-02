@@ -1,0 +1,131 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Yield Prolog</title>
+</head>
+<body>
+<table style="text-align: left;" border="0" cellpadding="5"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td
+ style="background-color: rgb(240, 240, 240); vertical-align: top; text-align: center;">
+      <h3>Yield&nbsp;Prolog</h3>
+      <a href="http://sourceforge.net/projects/yieldprolog/files/">Download</a><br>
+      <br>
+      <a href="tutorial_toc.html"><span
+ style="text-decoration: underline;">Documentation</span></a><br>
+      <br>
+      <a href="queryEditor.html">Query Editor</a><br>
+      <br>
+      <a href="benchmarks.html">Benchmarks</a><br>
+      <br>
+      <a
+ href="http://sourceforge.net/tracker/?group_id=176875&amp;atid=878990">Report
+Bugs</a><br>
+      <br>
+      <a href="http://sourceforge.net/projects/yieldprolog/">Sourceforge
+Project</a><br>
+      <br>
+      <a href="http://sourceforge.net/"><img
+ src="http://sourceforge.net/sflogo.php?group_id=3&amp;type=1"
+ alt="Sourceforge.net" nosave="" width="88" border="0" height="31"></a><br>
+      </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">Yield
+Prolog</span> lets you embed
+Prolog programs directly in Python, C# <a href="#csharp_footnote">[1]</a>
+or Javascript <a href="#javascript_footnote">[2]</a>
+by using the <span style="font-family: monospace;">yield</span>
+keyword. For example,
+here is the classic "uncle" predicate in Prolog:<br>
+      <br>
+      <table style="text-align: left;" border="1" cellpadding="4"
+ cellspacing="0">
+        <tbody>
+          <tr>
+            <td style="vertical-align: top;">
+            <pre>uncle(Person, Uncle) :-<br>  parent(Person, Parent),<br>  brother(Parent, Uncle).<br></pre>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <br>
+(This says that a person has an uncle if the person has a parent and
+that
+parent has a brother.) And here it is in Yield Prolog:<br>
+      <br>
+      <table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+        <tbody>
+          <tr>
+            <td style="vertical-align: top;"><span
+ style="font-weight: bold;">Python</span><br>
+            </td>
+            <td style="vertical-align: top;"><span
+ style="font-weight: bold;">C#</span><br>
+            </td>
+          </tr>
+          <tr>
+            <td style="vertical-align: top;">
+            <pre>def uncle(Person, Uncle):<br>    Parent = Variable()<br>    for l1 in parent(Person, Parent):<br>        for l2 in brother(Parent, Uncle):<br>            yield False<br></pre>
+            </td>
+            <td style="vertical-align: top;" rowspan="3">
+            <pre>IEnumerable&lt;bool&gt; uncle(object Person, object Uncle) {<br>    Variable Parent = new Variable();<br>    foreach (bool l1 in parent(Person, Parent)) {<br>        foreach (bool l2 in brother(Parent, Uncle))<br>            yield return false;<br>    }<br>}</pre>
+            </td>
+          </tr>
+          <tr style="font-weight: bold;">
+            <td style="vertical-align: top;">Javascript</td>
+          </tr>
+          <tr>
+            <td style="vertical-align: top;">
+            <pre>function uncle(Person, Uncle) {<br>  var Parent = new Variable();<br>  for each (var l1 in parent(Person, Parent)) {<br>    for each (var l2 in brother(Parent, Uncle))<br>      yield false;<br>  }<br>}</pre>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <br>
+As you can see, the flow of the code in Yield Prolog is similar to
+Prolog. The <a href="tutorial_toc.html">Tutorial</a> explains how
+these
+examples work, without expecting you to know Prolog. And the <a
+ href="benchmarks.html">benchmarks</a> show that Yield Prolog in C# can
+be faster than efficient Prolog systems like Yap Prolog and XSB.<br>
+      <br>
+Yield Prolog is made possible by the <span
+ style="font-family: monospace;">yield</span> keyword, which
+automatically creates iterators that you can nest, combined with Yield
+Prolog's <span style="font-family: monospace;">Variable</span> class
+which can unify a variable with other values (just like in
+Prolog). There is no "API" standing between your code and Yield Prolog,
+because
+you just use the <span style="font-family: monospace;">yield</span>
+keyword to make "iterator functions" wherever you need them. Yield
+Prolog is part of your code, which can mix Prolog-style predicates
+directly with ordinary arrays, file I/O, GUI calls and all your own
+classes. Because it lets you mix these, Yield Prolog unifies the <a
+ href="http://en.wikipedia.org/wiki/Declarative_programming">declarative</a>
+and <a href="http://en.wikipedia.org/wiki/Procedural_programming">procedural</a>
+programming models. <br>
+      <br>
+      <hr style="width: 100%; height: 2px;"><a name="csharp_footnote"></a>1.
+Tested
+with
+C#
+.NET 2008 and Mono 2.0.<br>
+      <span style="font-family: monospace;"></span><a
+ name="javascript_footnote"></a>2.
+Yield Prolog for Javascript is supported in <a
+ href="http://www.mozilla.com/firefox/">Firefox 3</a> and <a
+ href="http://www.seamonkey-project.org/">Seamonkey 2</a>,
+which fully supports the <span style="font-family: monospace;">yield</span>
+keyword in EcmaScript 3.1.<br>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+<br>
+</body>
+</html>

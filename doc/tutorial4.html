@@ -1,0 +1,495 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Yield Prolog Tutorial 4</title>
+</head>
+<body>
+<table style="width: 100%; text-align: left;" cellpadding="5"
+ cellspacing="2">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><a href="tutorial3.html">&lt;&lt;
+Tutorial 3</a> <a href="tutorial_toc.html">^^Contents</a></td>
+      <td style="vertical-align: top;">
+      <h1>Yield Prolog Tutorial</h1>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<h1>4. Compiler<span style="font-family: monospace;"></span><br>
+</h1>
+In Tutorial 4, we work with the parser, compiler and module system.
+(Since this is for compiling Prolog code, this assumes some familiarity
+with the Prolog syntax.)<br>
+<ul>
+  <li><span style="font-weight: bold;">Python:</span> <span
+ style="font-family: monospace;">source/python/examples/YieldPrologTutorial/tutorial4.py</span><br>
+  </li>
+  <li><span style="font-weight: bold;">C#:</span> <span
+ style="font-family: monospace;">source/csharp/examples/YieldPrologTutorial/Tutorial4.cs</span><br>
+In Visual Studio .NET, you can load <span
+ style="font-family: monospace;">YieldPrologTutorial.sln</span> . In
+the project properties, make sure the Startup Object is <span
+ style="font-family: monospace;">Tutorial4</span>.</li>
+  <li><span style="font-weight: bold;">Javascript (requires yield
+support such as Firefox 3):</span> <span
+ style="font-family: monospace;">source/javascript/examples/YieldPrologTutorial/tutorial4.js</span>
+.<br>
+Open <span style="font-family: monospace;">tutorial4.html</span> from
+the same directory in a browser.</li>
+</ul>
+<h2><a name="Dynamic_Assert_and_Match"></a>Dynamic Assert and Match<span
+ style="font-family: monospace;"></span></h2>
+Let's modify the <a href="tutorial2.html#Recap">"brother" example</a>
+from Tutorial 2 by creating it dynamically.<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">Python</span><br>
+      </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>    YP.assertFact(Atom.a("brother"), \<br>        [Atom.a("Hillary"), Atom.a("Hugh")])<br>    YP.assertFact(Atom.a("brother"), \<br>        [Atom.a("Hillary"), Atom.a("Tony")])<br>    YP.assertFact(Atom.a("brother"), \<br>        [Atom.a("Bill"), Atom.a("Roger")])<br><br>    Brother = Variable()<br>    print "Using dynamic assert:"<br>    for l1 in YP.matchDynamic \<br>              (Atom.a("brother"), \<br>               [Atom.a("Hillary"), Brother]):<br>        print "Hillary has brother", \<br>            Brother.getValue()<br></pre>
+      </td>
+      <td style="vertical-align: top;" rowspan="3">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial4<br>{<br>    static void Main(string[] args)<br>    {<br>        YP.assertFact(Atom.a("brother"), <br>            new object[] { Atom.a("Hillary"), Atom.a("Hugh") });<br>        YP.assertFact(Atom.a("brother"), <br>            new object[] { Atom.a("Hillary"), Atom.a("Tony") });<br>        YP.assertFact(Atom.a("brother"), <br>            new object[] { Atom.a("Bill"), Atom.a("Roger") });<br><br>        Variable Brother = new Variable();<br>        Console.WriteLine("Using dynamic assert:");<br>        foreach (bool l1 in YP.matchDynamic<br>                 (Atom.a("brother"), new object[] <br>                  { Atom.a("Hillary"), Brother}))<br>            Console.WriteLine("Hillary has brother " +<br>                Brother.getValue() + ".");<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;"> <span
+ style="font-weight: bold;">Javascript</span></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>    YP.assertFact(Atom.a("brother"), <br>        [Atom.a("Hillary"), Atom.a("Hugh")]);<br>    YP.assertFact(Atom.a("brother"), <br>        [Atom.a("Hillary"), Atom.a("Tony")]);<br>    YP.assertFact(Atom.a("brother"), <br>        [Atom.a("Bill"), Atom.a("Roger")]);<br><br>    var Brother = new Variable();<br>    document.write("Using dynamic assert:&lt;br&gt;");<br>    for each (var l1 in YP.matchDynamic<br>              (Atom.a("brother"),<br>               [Atom.a("Hillary"), Brother]))<br>        document.write("Hillary has brother " +<br>            Brother.getValue() + ".&lt;br&gt;");<br><br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+There are a few differences from the earlier example:<br>
+<ul>
+  <li><span style="font-family: monospace;">Atom</span>: Instead of a
+string like <span style="font-family: monospace;">"Hillary"</span>, we
+use <span style="font-family: monospace;">Atom.a("Hillary")</span>,
+where <span style="font-family: monospace;">Atom.a</span> returns a
+unique object of type <span style="font-family: monospace;">Atom</span>.
+Each time you call <span style="font-family: monospace;">Atom.a("Hillary")</span>
+it will return the same object, which means you can use the == operator
+to instantly test for equality.</li>
+  <li><span style="font-family: monospace;">assertFact</span>: The
+first time you call <span style="font-family: monospace;">YP.assertFact(<span
+ style="font-style: italic;">name</span>, <span
+ style="font-style: italic;">values</span>)</span> for a certain name,
+it creates a new list for the array of values. Each time you call <span
+ style="font-family: monospace;">YP.assertFact</span> for the same
+name, it appends the array of values to the list. <a href="#footnote1">[1]</a>
+(You can also use <span style="font-family: monospace;">YP.prependFact</span>.)
+Note that the name must be an <span style="font-family: monospace;">Atom</span>.<br>
+  </li>
+  <li><span style="font-family: monospace;">matchDynamic</span>:
+Instead of calling the static function <span
+ style="font-family: monospace;">brother</span> with the arguments <span
+ style="font-family: monospace;">"Hillary"</span> and <span
+ style="font-family: monospace;">Brother</span>, we call <span
+ style="font-family: monospace;">YP.matchDynamic</span> with the name <span
+ style="font-family: monospace;">Atom.a("brother")</span> and the
+arguments array containing <span style="font-family: monospace;">Atom.a("Hillary")</span>
+and <span style="font-family: monospace;">Brother</span>. This matches
+the arguments with the values given to <span
+ style="font-family: monospace;">YP.assertFact</span>. <a
+ href="#footnote2">[2]</a><br>
+  </li>
+</ul>
+This prints the same result as before:<br>
+<pre>Using dynamic assert:<br>Hillary has brother Hugh.<br>Hillary has brother Tony.</pre>
+<h2><a name="Dynamic_vs._static"></a>Dynamic vs. static</h2>
+In this tutorial, we want to learn to use the compiler which produces
+static functions, so why are we learning about dynamic matching?
+Because to use the compiler properly, we need to control when the
+compiler will try to call a function statically or dynamically. For
+example, let us repeat the earlier static definition of <span
+ style="font-family: monospace;">parent</span>:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;"></span><span
+ style="font-weight: bold;">Python</span> </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def parent(arg1, arg2):<br>  for l1 in YP.unify \<br>      (arg1, Atom.a("Chelsea")):<br>    for l2 in YP.unify \<br>        (arg2, Atom.a("Hillary")):<br>      yield False<br>  for l1 in YP.unify \<br>      (arg1, Atom.a("Chelsea")):<br>    for l2 in YP.unify \<br>        (arg2, Atom.a("Bill")):<br>      yield False<br></pre>
+      </td>
+      <td style="vertical-align: top;" rowspan="3">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial4<br>{<br>    public static IEnumerable&lt;bool&gt; parent<br>        (object Person, object Parent) {<br>        foreach (bool l1 in YP.unify<br>                 (Person, Atom.a("Chelsea"))) {<br>            foreach (bool l2 in YP.unify<br>                     (Parent, Atom.a("Hillary")))<br>                yield return false;<br>        }<br>        foreach (bool l1 in YP.unify<br>                 (Person, Atom.a("Chelsea"))) {<br>            foreach (bool l2 in YP.unify<br>                     (Parent, Atom.a("Bill")))<br>                yield return false;<br>        }<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;"> <span
+ style="font-weight: bold;">Javascript</span></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>function parent(Person, Parent) {<br>  for each (var l2 in YP.unify<br>            (Person, Atom.a("Chelsea"))) {<br>    for each (var l3 in YP.unify<br>              (Parent, Atom.a("Hillary"))) {<br>      yield false;<br>    }<br>  }<br>  for each (var l2 in YP.unify<br>            (Person, Atom.a("Chelsea"))) {<br>    for each (var l3 in YP.unify<br>              (Parent, Atom.a("Bill"))) {<br>      yield false;<br>    }<br>  }<br>}</pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+When we compile <span style="font-family: monospace;">uncle</span>,
+which calls <span style="font-family: monospace;">parent</span> and <span
+ style="font-family: monospace;">brother</span>, how will it know which
+is dynamic or static?<br>
+<h2><a name="Compiling_uncle"></a>Compiling <span
+ style="font-family: monospace;">uncle</span></h2>
+Here again is the Prolog code for uncle, which we want to parse and
+compile:<br>
+<pre>uncle(Person, Uncle) :-<br>  parent(Person, Parent),<br>  brother(Parent, Uncle).<br><br></pre>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;"></span><span
+ style="font-weight: bold;">Python</span> </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>    print "# Compiled code:"<br>    prologCode = \<br>        "uncle(Person, Uncle) :- \n" + \<br>        "  parent(Person, Parent), \n" + \<br>        "  brother(Parent, Uncle). \n"<br>    YP.tell(sys.stdout)<br>    YP.see(YP.StringReader(prologCode))<br>    TermList = Variable()<br>    PseudoCode = Variable()<br>    for l1 in parseInput(TermList):<br>        for l2 in makeFunctionPseudoCode \<br>                  (TermList, PseudoCode):<br>            convertFunctionPython(PseudoCode)<br>    YP.seen()<br></pre>
+      </td>
+      <td style="vertical-align: top;" rowspan="3">
+      <pre>using System;<br>using System.Collections.Generic;<br>using YieldProlog;<br>class Tutorial4<br>{<br>    static void Main(string[] args)<br>    {<br>        Console.WriteLine("// Compiled code:");<br>        string prologCode =<br>            "uncle(Person, Uncle) :- \n" +<br>            "  parent(Person, Parent), \n" +<br>            "  brother(Parent, Uncle). \n";<br>        YP.tell(Console.Out);<br>        YP.see(new StringReader(prologCode));<br>        Variable TermList = new Variable();<br>        Variable PseudoCode = new Variable();<br>        foreach (bool l1 in Parser.parseInput(TermList)) {<br>            foreach (bool l2 in Compiler.makeFunctionPseudoCode<br>                     (TermList, PseudoCode))<br>                Compiler.convertFunctionCSharp(PseudoCode);<br>        }<br>        YP.seen();<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">Javascript</span></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>    var prologCode =<br>        "uncle(Person, Uncle) :- \n" +<br>        "  parent(Person, Parent), \n" +<br>        "  brother(Parent, Uncle). \n";<br>    YP.see(new YP.StringReader(prologCode));<br>    var output = new YP.StringWriter();<br>    YP.tell(output);<br>    var TermList = new Variable();<br>    var PseudoCode = new Variable();<br>    for each (var l1 in parseInput(TermList)) {<br>        for each (var l2 in makeFunctionPseudoCode<br>                  (TermList, PseudoCode))<br>            convertFunctionJavascript(PseudoCode);<br>    }<br>    YP.seen();<br>    YP.told();<br>    document.write("// Compiled code:&lt;br&gt;");<br>    document.write<br>      (output.toString().replace<br>       (/\n/g,"&lt;br&gt;").replace(/ /g,"&amp;nbsp;"));<br><br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+This parse and compile code follows these steps:<br>
+<ol>
+  <li>Use <span style="font-family: monospace;">YP.see</span> to set
+the default input for the parser, in this case to read from the <span
+ style="font-family: monospace;">prologCode</span> string. <span
+ style="font-style: italic;">The input must end with a newline.</span><br>
+  </li>
+  <li>Use <span style="font-family: monospace;">YP.tell</span> to set
+the default output for the compiler.</li>
+  <li>Call <span style="font-family: monospace;">parseInput</span>
+to read from the default input and output the <span
+ style="font-family: monospace;">TermList</span>.</li>
+  <li>Call <span style="font-family: monospace;">makeFunctionPseudoCode</span>
+to convert the <span style="font-family: monospace;">TermList</span>
+to <span style="font-family: monospace;">PseudoCode</span>, which is
+an intermediate format which can be converted to several languages.
+This yields multiple times for the pseudo code for each function we
+want to output.</li>
+  <li>Call <span style="font-family: monospace;">convertFunctionPython</span>,
+    <span style="font-family: monospace;">convertFunctionJavascript</span>
+or <span style="font-family: monospace;">convertFunctionCSharp</span>
+as appropriate for the target language. This writes to the default
+output.</li>
+</ol>
+Here is the compiled output for each target language:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;"></span><span
+ style="font-weight: bold;">Python</span> </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre># Compiled code:<br>def getDeclaringClass():<br>  return globals()<br><br>def uncle(Person, Uncle):<br>  Parent = Variable()<br>  for l1 in YP.matchDynamic \<br>     (Atom.a("parent"), [Person, Parent]):<br>    for l2 in YP.matchDynamic \<br>       (Atom.a("brother"), [Parent, Uncle]):<br>      yield False<br><br></pre>
+      </td>
+      <td style="vertical-align: top;" rowspan="3">
+      <pre>// Compiled code:<br>public class YPInnerClass {}<br>public static Type getDeclaringClass() { <br>  return typeof(YPInnerClass).DeclaringType; <br>}<br><br>public static IEnumerable&lt;bool&gt; uncle<br>    (object Person, object Uncle) {<br>  {<br>    Variable Parent = new Variable();<br>    foreach (bool l2 in YP.matchDynamic<br>             (Atom.a("parent"), new object[] <br>              {Person, Parent})) {<br>      foreach (bool l3 in YP.matchDynamic<br>               (Atom.a("brother"), new object[] <br>                {Parent, Uncle})) {<br>        yield return false;<br>      }<br>    }<br>  }<br>}<br></pre>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;"> <span
+ style="font-weight: bold;">Javascript</span></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>// Compiled code:<br>function&nbsp;getDeclaringClass()&nbsp;{&nbsp;return&nbsp;null;&nbsp;}<br><br>function&nbsp;uncle(Person,&nbsp;Uncle)&nbsp;{<br>&nbsp;&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;var&nbsp;Parent&nbsp;=&nbsp;new&nbsp;Variable();<br>&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l2&nbsp;in&nbsp;YP.matchDynamic<br>              (Atom.a("parent"), <br>               [Person,&nbsp;Parent]))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l3&nbsp;in&nbsp;YP.matchDynamic<br>                (Atom.a("brother"), <br>                 [Parent,&nbsp;Uncle]))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;false;<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+(We will discuss <span style="font-family: monospace;">getDeclaringClass</span>
+later.) Notice that in the <span style="font-family: monospace;">uncle</span>
+function, the compiler used <span style="font-family: monospace;">YP.matchDynamic</span>
+to call both <span style="font-family: monospace;">parent</span> and <span
+ style="font-family: monospace;">brother</span>. This is what we want
+for brother, but we want to call <span style="font-family: monospace;">parent</span>
+statically. There are three ways in which the compiler will call a
+function statically:<br>
+<ol>
+  <li>Use <span style="font-family: monospace;">import</span> in the
+Prolog code</li>
+  <li>Define the function locally in the same input file</li>
+  <li>Use module <span style="font-family: monospace;">Atom.a("")</span>
+when calling as a dynamic goal</li>
+</ol>
+We look at each of these below.<br>
+<h2><a name="Using_import_to_call_a_static_function"></a>Using <span
+ style="font-family: monospace;">import</span> to call a static function</h2>
+If we want to call a static function <a href="#footnote3">[3]</a>, but
+it is not defined in the
+Prolog code, we can simply add an <span style="font-family: monospace;">import</span>
+directive<span style="font-family: monospace;"></span>. (In Prolog, if
+you start a line with <span style="font-family: monospace;">:-</span>
+it is a directive to the compiler. Don't forget to end with a period.):
+<pre>:- import('', [parent/2]).<br><br>uncle(Person, Uncle) :-<br>  parent(Person, Parent),<br>  brother(Parent, Uncle).<br></pre>
+We use this as the <span style="font-family: monospace;">prologCode</span>
+string in the same parse and compile code as above. Here is the output:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;"></span><span
+ style="font-weight: bold;">Python</span> </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre># Calling an imported function:<br>def getDeclaringClass():<br>  return globals()<br><br>def uncle(Person, Uncle):<br>  Parent = Variable()<br>  for l1 in parent(Person, Parent):<br>    for l2 in YP.matchDynamic \<br>       (Atom.a("brother"), [Parent, Uncle]):<br>      yield False<br></pre>
+      </td>
+      <td style="vertical-align: top;" rowspan="3">
+      <pre>// Calling an imported function:<br>public class YPInnerClass {}<br>public static Type getDeclaringClass() { <br>  return typeof(YPInnerClass).DeclaringType; <br>}<br><br>public static IEnumerable&lt;bool&gt; uncle<br>     (object Person, object Uncle) {<br>  {<br>    Variable Parent = new Variable();<br>    foreach (bool l2 in parent(Person, Parent)) {<br>      foreach (bool l3 in YP.matchDynamic<br>               (Atom.a("brother"), new object[] <br>                {Parent, Uncle})) {<br>        yield return false;<br>      }<br>    }<br>  }<br>}<br></pre>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;"> <span
+ style="font-weight: bold;">Javascript</span></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>// Calling an imported function:<br>function&nbsp;getDeclaringClass()&nbsp;{&nbsp;return&nbsp;null;&nbsp;}<br><br>function&nbsp;uncle(Person,&nbsp;Uncle)&nbsp;{<br>&nbsp;&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;var&nbsp;Parent&nbsp;=&nbsp;new&nbsp;Variable();<br>&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l2&nbsp;in&nbsp;parent(Person,&nbsp;Parent))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l3&nbsp;in&nbsp;YP.matchDynamic<br>                (Atom.a("brother"), <br>                 [Parent,&nbsp;Uncle]))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;false;<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+Notice that <span style="font-family: monospace;">parent</span> is
+called statically. <br>
+<br>
+The <span style="font-family: monospace;">import</span> directive has
+two arguments. The first argument is the module where the imported
+function is found, which is always <span
+ style="font-family: monospace;">''</span>. <a href="#footnote4">[4]</a>
+For C#, this means the imported function is in the same class as the
+calling function. For Javascript and Python, this means the imported
+function is in the global scope.<br>
+<br>
+The second argument to <span style="font-family: monospace;">import</span>
+is the comma-separated list of imported functions, where each member of
+the list is <span style="font-family: monospace;"><span
+ style="font-style: italic;">name</span>/<span
+ style="font-style: italic;">n</span></span>, where <span
+ style="font-family: monospace;"><span style="font-style: italic;">name</span></span>
+is the name of the function and <span style="font-family: monospace;"><span
+ style="font-style: italic;">n</span></span> is the number of
+arguments. In this example, <span style="font-family: monospace;">parent</span>
+has two arguments, so we use <span style="font-family: monospace;">parent/2</span>.<br>
+<h2><a name="Calling_local_functions_statically"></a>Calling local
+functions statically</h2>
+Instead of using <span style="font-family: monospace;">import</span>,
+a way to get the same result is to define <span
+ style="font-family: monospace;">parent</span> in the same input with <span
+ style="font-family: monospace;">uncle</span>:<br>
+<pre>parent('Chelsea', 'Hillary').<br>parent('Chelsea', 'Bill').<br><br>uncle(Person, Uncle) :-<br>  parent(Person, Parent),<br>  brother(Parent, Uncle).</pre>
+We use this as the <span style="font-family: monospace;">prologCode</span>
+string in the same parse and compile code as above. Here is the output:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;"></span><span
+ style="font-weight: bold;">Python</span> </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre># Calling a locally-defined function:<br>def getDeclaringClass():<br>  return globals()<br><br>def parent(arg1, arg2):<br>  for l1 in YP.unify(arg1, Atom.a("Chelsea")):<br>    for l2 in YP.unify(arg2, Atom.a("Hillary")):<br>      yield False<br>  for l1 in YP.unify(arg1, Atom.a("Chelsea")):<br>    for l2 in YP.unify(arg2, Atom.a("Bill")):<br>      yield False<br><br>def uncle(Person, Uncle):<br>  Parent = Variable()<br>  for l1 in parent(Person, Parent):<br>    for l2 in YP.matchDynamic \<br>       (Atom.a("brother"), [Parent, Uncle]):<br>      yield False<br></pre>
+      </td>
+      <td style="vertical-align: top;" rowspan="3">
+      <pre>// Calling a locally-defined function:<br>public class YPInnerClass {}<br>public static Type getDeclaringClass() { <br>  return typeof(YPInnerClass).DeclaringType; <br>}<br><br>public static IEnumerable&lt;bool&gt; parent<br>    (object arg1, object arg2) {<br>  {<br>    foreach (bool l2 in YP.unify<br>             (arg1, Atom.a("Chelsea"))) {<br>      foreach (bool l3 in YP.unify<br>               (arg2, Atom.a("Hillary"))) {<br>        yield return false;<br>      }<br>    }<br>  }<br>  {<br>    foreach (bool l2 in YP.unify<br>             (arg1, Atom.a("Chelsea"))) {<br>      foreach (bool l3 in YP.unify<br>               (arg2, Atom.a("Bill"))) {<br>        yield return false;<br>      }<br>    }<br>  }<br>}<br><br>public static IEnumerable&lt;bool&gt; uncle(object Person, object Uncle) {<br>  {<br>    Variable Parent = new Variable();<br>    foreach (bool l2 in parent(Person, Parent)) {<br>      foreach (bool l3 in YP.matchDynamic<br>               (Atom.a("brother"), new object[] <br>                {Parent, Uncle})) {<br>        yield return false;<br>      }<br>    }<br>  }<br>}<br></pre>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">Javascript</span></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>// Calling a locally-defined function:<br>function&nbsp;getDeclaringClass()&nbsp;{&nbsp;return&nbsp;null;&nbsp;}<br><br>function&nbsp;parent(arg1,&nbsp;arg2)&nbsp;{<br>&nbsp;&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l2&nbsp;in&nbsp;YP.unify<br>              (arg1,&nbsp;Atom.a("Chelsea")))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l3&nbsp;in&nbsp;YP.unify<br>                (arg2,&nbsp;Atom.a("Hillary")))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;false;<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>&nbsp;&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l2&nbsp;in&nbsp;YP.unify<br>              (arg1,&nbsp;Atom.a("Chelsea")))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l3&nbsp;in&nbsp;YP.unify<br>                (arg2,&nbsp;Atom.a("Bill")))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;false;<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}<br><br>function&nbsp;uncle(Person,&nbsp;Uncle)&nbsp;{<br>&nbsp;&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;var&nbsp;Parent&nbsp;=&nbsp;new&nbsp;Variable();<br>&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l2&nbsp;in&nbsp;parent(Person,&nbsp;Parent))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l3&nbsp;in&nbsp;YP.matchDynamic<br>                (Atom.a("brother"), <br>                 [Parent,&nbsp;Uncle]))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;false;<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+Notice that the compiled version of <span
+ style="font-family: monospace;">parent</span> is basically the same as
+the hand-coded one <a href="#Dynamic_vs._static">above</a> (with
+different argument names). Also note that in <span
+ style="font-family: monospace;">uncle</span>, <span
+ style="font-family: monospace;">parent</span> is called statically
+because it is defined in the same input code.<br>
+<br>
+In summary, it is preferred to put all the static functions in the same
+input file since all functions need to be in the same class (for C#) or
+in the global scope (for Python and Javascript). However, if you want
+to hand-code a static function, or don't have all functions available
+when you call <span style="font-family: monospace;">parseInput</span>,
+then use the <span style="font-family: monospace;">import </span>directive
+to statically call them. This covers most cases, but we still need to
+look at dynamic goals.<br>
+<h2><a name="Module_Atom.a_for_dynamic_goals"></a>Module <span
+ style="font-family: monospace;">Atom.a("")</span> for dynamic goals</h2>
+Prolog allows you to define and call code dynamically. For example, let
+us modify <span style="font-family: monospace;">uncle</span> to put <span
+ style="font-family: monospace;">parent</span> inside a dynamic goal
+and then call the goal:<br>
+<pre>:- import('', [parent/2]).<br><br>uncle(Person, Uncle) :-<br>  Goal = parent(Person, Parent),<br>  Goal, <br>  brother(Parent, Uncle).<br></pre>
+We use this as the <span style="font-family: monospace;">prologCode</span>
+string in the same parse and compile code as above. Here is the output:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;"></span><span
+ style="font-weight: bold;">Python</span> </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre># Calling a dynamic goal:<br>def getDeclaringClass():<br>  return globals()<br><br>def uncle(Person, Uncle):<br>  Goal = Variable()<br>  Parent = Variable()<br>  for l1 in YP.unify \<br>     (Goal, Functor2 \<br>      (Atom.a("parent", Atom.a("")), \<br>       Person, Parent)):<br>    for l2 in YP.getIterator \<br>       (Goal, getDeclaringClass()):<br>      for l3 in YP.matchDynamic \<br>         (Atom.a("brother"), [Parent, Uncle]):<br>        yield False<br></pre>
+      </td>
+      <td style="vertical-align: top;" rowspan="3">
+      <pre>// Calling a dynamic goal:<br>public class YPInnerClass {}<br>public static Type getDeclaringClass() { <br>  return typeof(YPInnerClass).DeclaringType; <br>}<br><br>public static IEnumerable&lt;bool&gt; uncle<br>      (object Person, object Uncle) {<br>  {<br>    Variable Goal = new Variable();<br>    Variable Parent = new Variable();<br>    foreach (bool l2 in YP.unify<br>             (Goal, new Functor2<br>              (Atom.a("parent", Atom.a("")), <br>               Person, Parent))) {<br>      foreach (bool l3 in YP.getIterator<br>               (Goal, getDeclaringClass())) {<br>        foreach (bool l4 in YP.matchDynamic<br>                 (Atom.a("brother"), new object[] <br>                  {Parent, Uncle})) {<br>          yield return false;<br>        }<br>      }<br>    }<br> &nbsp;}<br>}<br></pre>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;"> <span
+ style="font-weight: bold;">Javascript</span></td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>// Calling a dynamic goal:<br>function&nbsp;getDeclaringClass()&nbsp;{&nbsp;return&nbsp;null;&nbsp;}<br><br>function&nbsp;uncle(Person,&nbsp;Uncle)&nbsp;{<br>&nbsp;&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;var&nbsp;Goal&nbsp;=&nbsp;new&nbsp;Variable();<br>&nbsp;&nbsp;&nbsp;&nbsp;var&nbsp;Parent&nbsp;=&nbsp;new&nbsp;Variable();<br>&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l2&nbsp;in&nbsp;YP.unify<br>              (Goal,&nbsp;new&nbsp;Functor2<br>               (Atom.a("parent",&nbsp;Atom.a("")), <br>                Person,&nbsp;Parent)))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l3&nbsp;in&nbsp;YP.getIterator<br>                (Goal,&nbsp;getDeclaringClass()))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;for&nbsp;each&nbsp;(var&nbsp;l4&nbsp;in&nbsp;YP.matchDynamic<br>                  (Atom.a("brother"), <br>                   [Parent,&nbsp;Uncle]))&nbsp;{<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;yield&nbsp;false;<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;&nbsp;&nbsp;}<br>&nbsp;&nbsp;}<br>}</pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+In <span style="font-family: monospace;">uncle</span>, we first unify <span
+ style="font-family: monospace;">Goal</span> with a <span
+ style="font-family: monospace;">Functor2</span> which represents the
+term <span style="font-family: monospace;">parent(Person, Parent)</span>.
+Notice that&nbsp;<span style="font-family: monospace;"></span> <span
+ style="font-family: monospace;">Atom.a("parent", Atom.a(""))</span>
+has a second argument which is the module that declared the <span
+ style="font-family: monospace;">Atom</span>. (<span
+ style="font-family: monospace;">Atom.a("")</span> is the same as the
+Prolog code for the module <span style="font-family: monospace;">''</span>
+in the <span style="font-family: monospace;">import</span> directive.)
+As before, the declaring module is <span
+ style="font-family: monospace;">Atom.a("")</span> if the function is
+in
+the <span style="font-family: monospace;">import</span> directive, or
+if a function with the atom's name is defined locally in the same input.<br>
+<br>
+Next, we pass the <span style="font-family: monospace;">Goal</span> to
+<span style="font-family: monospace;">YP.getIterator</span> which
+examines the goal and figures out how to call it. <span
+ style="font-family: monospace;">YP.getIterator</span> sees that it
+needs to call <span style="font-family: monospace;">parent</span> and
+that the <span style="font-family: monospace;">Atom</span> for <span
+ style="font-family: monospace;">parent</span> was declared in the
+module <span style="font-family: monospace;">Atom.a("")</span> which
+means "the same module as the caller". This is why the caller always
+passes <span style="font-family: monospace;">getDeclaringClass()</span>.
+For Python and Javascript, <span style="font-family: monospace;">getDeclaringClass</span>
+returns null which means the global scope. For C#, <span
+ style="font-family: monospace;">getDeclaringClass</span> uses a trick
+with the locally-defined <span style="font-family: monospace;">YPInnerClass</span>
+to get the <span style="font-family: monospace;">Type</span> object of
+the class of the caller. In this way, <span
+ style="font-family: monospace;">YP.getIterator</span> finds and calls
+the statically defined <span style="font-family: monospace;">parent</span>
+function. (If the <span style="font-family: monospace;">Atom</span>
+for the function name is defined without a module or with the module <span
+ style="font-family: monospace;">Atom.NIL</span>, then <span
+ style="font-family: monospace;">YP.getIterator</span> uses <span
+ style="font-family: monospace;">YP.matchDynamic</span>.)<br>
+<br>
+In summary, you will rarely have to write code which directly calls <span
+ style="font-family: monospace;">YP.getIterator</span> or <span
+ style="font-family: monospace;">getDeclaringClass</span>. But it is
+important to understand how static functions are called from dynamic
+goals, especially if a dynamic goal is passed as an argument from one
+function to another before it is called.<br>
+<br>
+<hr style="width: 100%; height: 2px;">
+<a name="footnote1"></a>1. The length of the values array is called the
+"arity". Strictly speaking, to add to the same list, the name and
+"arity" must be the same. If the length of the values array is
+different, it is considered a different list in the same way that
+functions in C# are different if they have different numbers of
+arguments.<br>
+<br>
+<a name="footnote2"></a>2. <span style="font-family: monospace;">YP.assertFact</span>
+actually stores the values in an <span style="font-family: monospace;">IndexedAnswers</span>
+object which is indexed dynamically to be very efficient.<br>
+<br>
+<a name="footnote3"></a>3. Prolog uses the term "predicate", but we say
+"function" because we are focussed on the function which the compiler
+produces for the target language.<br>
+<br>
+<a name="footnote4"></a>4. In the future, Yield Prolog may support
+general module names but this is more complicated because we would need
+a system where you register a class with a module name. For now, we
+just allow <span style="font-family: monospace;">''</span> which means
+"the same class as the caller" so the caller can just use the locally
+defined <span style="font-family: monospace;">getDeclaringClass</span>
+to find its own "module".<br>
+<br>
+If you really need to statically call a function in a different class
+(until Yield Prolog supports general module names), there is an
+inelegant way to do it. Here is how to call <span
+ style="font-family: monospace;">parent</span> if it is defined in <span
+ style="font-family: monospace;">OtherClass</span>:<br>
+<pre>:- import('', ['OtherClass.parent'/2]).<br>uncle(Person, Uncle) :-<br>  'OtherClass.parent'(Person, Parent),<br>  brother(Parent, Uncle).<br></pre>
+In other words, you substitute <span style="font-family: monospace;">parent</span>
+everywhere with <span style="font-family: monospace;">'OtherClass.parent'</span>.<br>
+<br>
+</body>
+</html>

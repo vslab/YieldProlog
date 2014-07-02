@@ -1,0 +1,150 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Yield Prolog Benchmarks</title>
+</head>
+<body>
+<a href="index.html">Home</a><br>
+<h1>Yield Prolog Benchmarks</h1>
+We benchmark <a href="index.html">Yield Prolog</a> against other
+Prolog systems. When we
+optimize Yield Prolog in C# by allowing typed arguments, it can be
+faster than Yap Prolog and XSB.<br>
+<br>
+All benchmarks use an Intel Core Solo U1500 1.33GHz, 1GB RAM
+under Windows Vista (Sony Vaio UX390N). For C#, I ran the .exe directly
+instead of inside the development environment which can be slower.<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td
+ style="background-color: rgb(200, 200, 200); vertical-align: top;"><br>
+      </td>
+      <td style="vertical-align: top;">Yield Prolog<br>
+      <a href="http://www.microsoft.com/express/vcsharp/">C#
+2008</a><br>
+"optimized<br>
+code"</td>
+      <td style="vertical-align: top;"><a
+ href="http://www.ncc.up.pt/%7Evsc/Yap/">Yap Prolog</a><br>
+5.1.1</td>
+      <td style="vertical-align: top;">Yield Prolog<br>
+      <a href="http://www.mono-project.com/Downloads">C# Mono 2.0</a><br>
+"optimized<br>
+code"<br>
+      </td>
+      <td style="vertical-align: top;"><a
+ href="http://xsb.sourceforge.net/">XSB</a><br>
+3.1<br>
+      </td>
+      <td style="vertical-align: top;"><a
+ href="http://www.swi-prolog.org/">SWI-Prolog</a><br>
+5.6.5</td>
+      <td style="vertical-align: top;">Yield Prolog<br>
+      <a href="http://www.microsoft.com/express/vcsharp/">C#
+2008</a><br>
+"naive code"<br>
+      </td>
+      <td style="vertical-align: top;">Yield Prolog<br>
+      <a href="http://www.mono-project.com/Downloads">C# Mono 2.0</a><br>
+"naive code"</td>
+      <td style="vertical-align: top;"><a
+ href="http://jlogic.sourceforge.net/">JLog</a><br>
+1.3.4 </td>
+      <td style="vertical-align: top;">Yield Prolog<br>
+      <a href="http://www.python.org/">Python 2.5.2</a><br>
+"optimized<br>
+code"<br>
+      </td>
+      <td style="vertical-align: top;">Yield Prolog<br>
+Javascript<br>
+      <a
+ href="http://developer.mozilla.org/devnews/index.php/2008/09/05/firefox-31-alpha-2-now-available-for-download/">Firefox
+3.1
+a2</a><br>
+"optimized<br>
+code" </td>
+      <td style="vertical-align: top;">Yield Prolog <a
+ href="http://www.codeplex.com/Wiki/View.aspx?ProjectName=IronPython">IronPython</a><br>
+2.0RC2<br>
+"optimized<br>
+code"<br>
+      </td>
+      <td style="vertical-align: top;">Yield Prolog<br>
+      <a href="http://www.python.org/">Python 2.5.2</a><br>
+"naive code"<br>
+      </td>
+      <td style="vertical-align: top;">Yield Prolog<br>
+Javascript<br>
+      <a
+ href="http://developer.mozilla.org/devnews/index.php/2008/09/05/firefox-31-alpha-2-now-available-for-download/">Firefox
+3.1
+a2</a><br>
+"naive<br>
+code" </td>
+      <td style="vertical-align: top;">Yield Prolog <a
+ href="http://www.codeplex.com/Wiki/View.aspx?ProjectName=IronPython">IronPython</a><br>
+2.0RC2<br>
+"naive<br>
+code"</td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">"queens"<br>
+(seconds)<br>
+      </td>
+      <td style="vertical-align: top;">0.91<br>
+      </td>
+      <td style="vertical-align: top;">0.94</td>
+      <td style="vertical-align: top;">1.04<br>
+      </td>
+      <td style="vertical-align: top;">2.34<br>
+      </td>
+      <td style="vertical-align: top;">6.07</td>
+      <td style="vertical-align: top;">7.06<br>
+      </td>
+      <td style="vertical-align: top;">8.93<br>
+      </td>
+      <td style="vertical-align: top;">23.1 </td>
+      <td style="vertical-align: top;">45.7<br>
+      </td>
+      <td style="vertical-align: top;">48.6 </td>
+      <td style="vertical-align: top;">91.4<br>
+      </td>
+      <td style="vertical-align: top;">310<br>
+      </td>
+      <td style="vertical-align: top;">446</td>
+      <td style="vertical-align: top;">1462<br>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+<h2>Queens</h2>
+The "queens" benchmark runs the classic Prolog problem to find every
+solution of an N by N chess board where no queen can attack another.
+Here is the code for the Prolog benchmarks. (This comes from Glendon
+Holst's <a href="http://jlogic.sourceforge.net/examples.html">JLog
+example</a>):<br>
+<pre>% Find all solutions of an 11 by 11 board.<br>% The \+ with the fail is a trick to make it find all solutions.<br>queensBenchmark :- time(\+ (queens(11, _Qs), fail)).<br>queens(N,Qs) :- rangeList(1,N,Ns), queens3(Ns,[],Qs).<br><br>queens3(UnplacedQs, SafeQs, Qs) :-<br>  selectq(Q, UnplacedQs, UnplacedQs1),<br>  \+ attack(Q,SafeQs),<br>  queens3(UnplacedQs1,[Q|SafeQs],Qs).<br>queens3([],Qs,Qs).<br><br>attack(X,Xs) :- attack3(X, 1, Xs).<br><br>attack3(X,N,[Y|_]) :- X =:= Y+N ; X =:= Y-N.<br>attack3(X,N,[_|Ys]) :- N1 is N+1, attack3(X,N1,Ys).<br><br>rangeList(M,N,[M]) :- M &gt;= N, !.<br>rangeList(M,N,[M|Tail]) :- M1 is M+1, rangeList(M1,N,Tail).<br><br>selectq(X,[X|Xs],Xs).  <br>selectq(X,[Y|Ys],[Y|Zs]) :- selectq(X,Ys,Zs). <br></pre>
+For the Yield Prolog benchmarks, the "naive code" literally translates
+the Prolog, and the function arguments are always assumed to be
+general. The "optimized code" allows the function arguments to be
+typed. For example, we require the first two arguments to <span
+ style="font-family: monospace;">rangeList</span> to be integers so
+that we don't have to call <span style="font-family: monospace;">YP.getValue()</span>.
+Also,
+the <span style="font-family: monospace;">attack</span> function
+is only used by <span style="font-family: monospace;">queens3</span>
+to check if there is an attack, and <span
+ style="font-family: monospace;">attack</span> never binds any
+variables, so the "optimized code" converts it to a normal function <span
+ style="font-family: monospace;">hasAttack</span> which returns a
+boolean.<br>
+<br>
+<br>
+</body>
+</html>

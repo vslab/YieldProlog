@@ -1,0 +1,563 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>Yield Prolog Tutorial 1</title>
+</head>
+<body>
+_
+<table style="width: 100%; text-align: left;" cellpadding="5"
+ cellspacing="2">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><a href="tutorial_toc.html">^^Contents</a>
+      <a href="tutorial2.html">Tutorial
+2
+&gt;&gt;</a></td>
+      <td style="vertical-align: top;">
+      <h1>Yield Prolog Tutorial</h1>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<h1>1. Introduction<br>
+</h1>
+This tutorial introduces you to Yield Prolog. For this tutorial, you do
+not need to know
+Prolog, but hopefully you will learn something about it. The example
+code is in the
+distribution directory:<br>
+<ul>
+  <li><span style="font-weight: bold;">Python (requires Python 2.5):</span>
+    <span style="font-family: monospace;">source/python/examples/YieldPrologTutorial/tutorial1.py</span><br>
+  </li>
+  <li><span style="font-weight: bold;">C# (requires .NET 2.0):</span> <span
+ style="font-family: monospace;">source/csharp/examples/YieldPrologTutorial/Tutorial1.cs</span><br>
+In Visual Studio .NET, you can load <span
+ style="font-family: monospace;">YieldPrologTutorial.sln</span> . In
+the project properties, make sure the Startup Object is <span
+ style="font-family: monospace;">Tutorial1</span>.</li>
+  <li><span style="font-weight: bold;">Javascript (requires yield
+support such as Firefox 3):</span> <span
+ style="font-family: monospace;">source/javascript/examples/YieldPrologTutorial/tutorial1.js</span>
+.<br>
+Open <span style="font-family: monospace;">tutorial1.html</span> from
+the same directory in a browser.<br>
+  </li>
+</ul>
+<h2><a name="The_yield_keword"></a>The <span
+ style="font-family: monospace;">yield </span>keyword</h2>
+You can use the <span style="font-family: monospace;">yield </span>keyword
+in a function to return an iterator to use in <span
+ style="font-family: monospace;">for...in</span>. For example:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">Python</span><br>
+      </td>
+      <td style="vertical-align: top;"><span style="font-weight: bold;">C#</span><br>
+      </td>
+    </tr>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def personWithReturnValue():<br>    yield "Chelsea"<br>    yield "Hillary"<br>    yield "Bill"<br><br>def main():<br>    print("Names using a return value:")<br>    for p in personWithReturnValue():<br>        print(p)<br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>class Tutorial1<br>{<br>    static IEnumerable&lt;string&gt; personWithReturnValue() {<br>        yield return "Chelsea";<br>        yield return "Hillary";<br>        yield return "Bill";<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Names using a return value:");<br>        foreach (string p in personWithReturnValue())<br>            Console.WriteLine(p);<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+Because of the <span style="font-family: monospace;">yield </span>keyword,
+when you call <span style="font-family: monospace;">personWithReturnValue</span>,
+it automatically returns an object that <span
+ style="font-family: monospace;">for...in </span>uses as an
+iterator. On each pass, the iterator returns the value given by the <span
+ style="font-family: monospace;">yield </span>keyword. So, the main
+function outputs:<br>
+<pre>Names using a return value:<br>Chelsea<br>Hillary<br>Bill<br></pre>
+Note that, because it is an iterator, a function like <span
+ style="font-family: monospace;">personWithReturnValue</span> can yield
+0, 1 or more times. In the example above, it yields 3 times.<br>
+<br>
+For more information on the <span style="font-family: monospace;">yield</span>
+keyword, see <a href="http://docs.python.org/ref/yield.html">this</a>
+for Python (requires Python 2.5) or <a
+ href="http://msdn2.microsoft.com/en-us/library/9k7k7cf0.aspx">this</a>
+for C# (requires .NET 2.0).<br>
+<h2><a name="Using_a_simple_variable_to_return_values"></a>Using a
+simple variable to return values<br>
+</h2>
+Instead of getting the result from the <span
+ style="font-family: monospace;">yield </span>return value, we can
+pass an object into the iterator which it will use to return the value.
+(This is useful when we want to return more than one result at a
+time.) Here is the simplest way to do it:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>class SimpleVariable:<br>    pass<br><br>def personWithSimpleVariable(Person):<br>    Person._value = "Chelsea"<br>    yield False<br>    Person._value = "Hillary"<br>    yield False<br>    Person._value = "Bill"<br>    yield False<br><br>def main():<br>    print("Names using SimpleVariable:")<br>    P = SimpleVariable()<br>    for l1 in personWithSimpleVariable(P):<br>        print(P._value)<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br><br>class SimpleVariable<br>{<br>    public object _value;<br>}<br><br>class Tutorial1<br>{<br>    static IEnumerable&lt;bool&gt; personWithSimpleVariable<br>	(SimpleVariable Person) {<br>        Person._value = "Chelsea";<br>        yield return false;<br>        Person._value = "Hillary";<br>        yield return false;<br>        Person._value = "Bill";<br>        yield return false;<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Names using SimpleVariable:");<br>        SimpleVariable P = new SimpleVariable();<br>        foreach (bool l1 in personWithSimpleVariable(P))<br>            Console.WriteLine(P._value);<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+The class <span style="font-family: monospace;">SimpleVariable </span>just
+has a member _<span style="font-family: monospace;">value</span>. The
+iterator function <span style="font-family: monospace;">personWithSimpleVariable
+</span>takes a <span style="font-family: monospace;">SimpleVariable </span>argument
+called
+<span style="font-family: monospace;">Person</span>. (Why spell the
+argument <span style="font-family: monospace;">Person</span> with an
+upper case letter? This is an old habit from Prolog where variable
+names start with an upper case letter. But in Yield Prolog, this is not
+required.)<br>
+<br>
+Each time <span style="font-family: monospace;">personWithSimpleVariable</span>
+needs
+to return a result, it sets <span style="font-family: monospace;">Person._value</span>
+and yields. The actual value returned by the <span
+ style="font-family: monospace;">yield </span>keyword doesn't matter
+any more, so we always return false<span style="font-family: monospace;"></span><span
+ style="font-family: monospace;"></span>.
+In the main function, we create an instance of <span
+ style="font-family: monospace;">SimpleVariable </span>and pass it to <span
+ style="font-family: monospace;">personWithSimpleVariable</span>. Then,
+inside the <span style="font-family: monospace;">for...in </span>loop,
+we print its _<span style="font-family: monospace;">value</span>. As
+before, it prints the three names.<br>
+<h2><a name="Using_UnifyingVariable_to_return_values"></a>Using <span
+ style="font-family: monospace;">UnifyingVariable </span>to
+return values</h2>
+We are almost there. We need a better variable class that keeps track
+of whether _<span style="font-family: monospace;">value </span>has an
+assigned value or not. If it has an assigned value, we say the variable
+is "bound", otherwise it is "unbound". To handle this, we create a new
+class <span style="font-family: monospace;">UnifyingVariable</span>
+with the
+function <span style="font-family: monospace;">unify</span><span
+ style="font-family: monospace;"></span>:<span
+ style="font-family: monospace;"></span><br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>class UnifyingVariable:<br>    def __init__(self):<br>        self._isBound = False<br><br>    def unify(self, arg):<br>        if not self._isBound:<br>            self._value = arg<br>            self._isBound = True<br>            yield False<br>            # Remove the binding.<br>            self._isBound = False<br>        elif self._value == arg:<br>            yield False<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>class UnifyingVariable<br>{<br>    public object _value;<br>    public bool _isBound = false;<br><br>    public IEnumerable&lt;bool&gt; unify(object arg) {<br>        if (!_isBound) {<br>            _value = arg;<br>            _isBound = true;<br>            yield return false;<br>            // Remove the binding.<br>            _isBound = false;<br>        }<br>        else if (_value.Equals(arg))<br>            yield return false;<br>    }<br>}<br><br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+Notice that <span style="font-family: monospace;">unify </span>is
+also an iterator function. If the value <span
+ style="font-family: monospace;"></span>is unbound, it sets it to the <span
+ style="font-family: monospace;">arg</span> argument, sets <span
+ style="font-family: monospace;">_isBound</span> true and yields as we
+did in <span style="font-family: monospace;">personWithSimpleVariable</span>.
+After the yield, we remove the binding by setting <span
+ style="font-family: monospace;">_isBound</span> false. Also notice
+that
+if the value<span style="font-family: monospace;"> </span>is already
+bound, it checks if the bound value equals the <span
+ style="font-family: monospace;">arg</span> argument. We will discuss
+this shortly.<br>
+<br>
+Here is how we use <span style="font-family: monospace;">UnifyingVariable</span>
+to return the three person names:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def personWithUnify(Person):<br>    for l1 in Person.unify("Chelsea"):<br>        yield False<br>    for l1 in Person.unify("Hillary"):<br>        yield False<br>    for l1 in Person.unify("Bill"):<br>        yield False<br><br>def main():<br>    print("Names using UnifyingVariable:")<br>    Person = UnifyingVariable()<br>    for l1 in personWithUnify(Person):<br>        print(Person._value)<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>class Tutorial1<br>{<br>    static IEnumerable&lt;bool&gt; personWithUnify<br>	(UnifyingVariable Person) {<br>        foreach (bool l1 in Person.unify("Chelsea"))<br>            yield return false;<br>        foreach (bool l1 in Person.unify("Hillary"))<br>            yield return false;<br>        foreach (bool l1 in Person.unify("Bill"))<br>            yield return false;<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Names using UnifyingVariable:");<br>        UnifyingVariable Person = new UnifyingVariable();<br>        foreach (bool l1 in personWithUnify(Person))<br>            Console.WriteLine(Person._value);<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+Believe it or not, this is a Prolog program <a href="#footnote1">[1]</a>.
+This <span style="font-family: monospace;">UnifyingVariable</span>
+class can be used for most Prolog programs. (However, Yield Prolog uses
+an enhanced <span style="font-family: monospace;">Variable</span>
+class that improves efficiency and addresses a few issues that we
+discuss in Tutorial 2.) In the rest of this tutorial, we experiement
+with <span style="font-family: monospace;">UnifyingVariable</span> and
+add a few helper functions.<br>
+<br>
+How does <span style="font-family: monospace;">personWithUnify</span>
+work? For each of the 3 values, it unifies <span
+ style="font-family: monospace;">Person </span>with
+the value and yields. <span style="font-family: monospace;">Person.unify</span>
+is used in a <span style="font-family: monospace;">for...in</span>
+loop, but the loop only goes through one iteration, so why use a
+loop?&nbsp; Why not just call <span style="font-family: monospace;">unify</span>
+once? It is true that <span style="font-family: monospace;">unify</span>
+only yields once, but remember that after it yields, it removes the
+binding before the <span style="font-family: monospace;">for...in</span>
+loop quits. This is important because <span
+ style="font-family: monospace;">Person </span>needs to be unbound
+before we do the next <span style="font-family: monospace;">for...in</span>
+loop which binds it to a new value.<br>
+<br>
+The main function passes the <span style="font-family: monospace;">Person
+</span>variable to <span style="font-family: monospace;">personWithUnify</span>
+in a <span style="font-family: monospace;">for...in </span>loop which
+prints each name by calling <span style="font-family: monospace;">Person._value</span>.
+<h2><a name="How_unify_works"></a>How <span
+ style="font-family: monospace;">unify </span>works</h2>
+The <span style="font-family: monospace;">unify </span>function in <span
+ style="font-family: monospace;">UnifyingVariable</span> actually
+performs two tasks:<br>
+<ol>
+  <li>If the value is unbound, it binds it to the argument.</li>
+  <li>If the value is bound, it compares the value to the argument. If
+the values are equal, <span style="font-family: monospace;">unify </span>yields
+once. (It "succeeds.") If the values are not equal, <span
+ style="font-family: monospace;">unify </span>does not yield. (It
+"fails.") In this way, if the value is bound, <span
+ style="font-family: monospace;">unify</span> acts more like an <span
+ style="font-family: monospace;">if</span> statement. If the values are
+equal, the code in the <span style="font-family: monospace;">for...in</span>
+block executes once, otherwise it is not executed.<br>
+  </li>
+</ol>
+<h2><a name="Using_unify_to_check_values"></a>Using <span
+ style="font-family: monospace;">unify </span>to
+check values<br>
+</h2>
+We can use <span style="font-family: monospace;">unify </span>to
+check a bound value like this:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def personWithUnify(Person):<br>    for l1 in Person.unify("Chelsea"):<br>        yield False<br>    for l1 in Person.unify("Hillary"):<br>        yield False<br>    for l1 in Person.unify("Bill"):<br>        yield False<br><br>def main():<br>    print("Use unify to check a person:")<br>    Person = UnifyingVariable()<br>    for l1 in Person.unify("Hillary"):<br>        for l2 in personWithUnify(Person):<br>            print("Hillary is a person.")<br>    for l1 in Person.unify("Buddy"):<br>        for l2 in personWithUnify(Person):<br>            # This won't print.<br>            print("Buddy is a person.")<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>class Tutorial1<br>{<br>    static IEnumerable&lt;bool&gt; personWithUnify<br>	(UnifyingVariable Person) {<br>        foreach (bool l1 in Person.unify("Chelsea"))<br>            yield return false;<br>        foreach (bool l1 in Person.unify("Hillary"))<br>            yield return false;<br>        foreach (bool l1 in Person.unify("Bill"))<br>            yield return false;<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Use unify to check a person:");<br>        UnifyingVariable Person = new UnifyingVariable();<br>        foreach (bool l1 in Person.unify("Hillary")) {<br>            foreach (bool l2 in personWithUnify(Person))<br>                Console.WriteLine("Hillary is a person.");<br>        }<br>        foreach (bool l1 in Person.unify("Buddy")) {<br>            foreach (bool l2 in personWithUnify(Person))<br>                // This won't print.<br>                Console.WriteLine("Buddy is a person.");<br>        }<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+(The code for <span style="font-family: monospace;">personWithUnify</span>
+is
+the same as before.)&nbsp; In the main function, we bind <span
+ style="font-family: monospace;">Person</span> to "Hillary" and call <span
+ style="font-family: monospace;">personWithUnify</span>. So, when <span
+ style="font-family: monospace;">personWithUnify</span> calls <span
+ style="font-family: monospace;">Person.unify("Chelsea")</span>, <span
+ style="font-family: monospace;">Person</span> is already bound, so <span
+ style="font-family: monospace;">unify </span>does not yield because
+the values are not equal. But, <span style="font-family: monospace;">personWithUnify</span>
+next calls <span style="font-family: monospace;">Person.unify("Hillary")</span>.
+The values are equal, so <span style="font-family: monospace;">unify </span>yields
+once which causes <span style="font-family: monospace;">personWithUnify
+</span>to
+yield once and we print "Hillary is a person". Next, "Hillary" and
+"Bill" are not equal, so it doesn't yield for "Bill".<br>
+<br>
+In the main function, after we check "Hillary", we bind <span
+ style="font-family: monospace;">Person</span> to "Buddy" and call <span
+ style="font-family: monospace;">personWithUnify</span>. Since this
+doesn't
+match any of the person names, <span style="font-family: monospace;">personWithUnify
+</span>never yields, and so we never execute the code in the loop to
+print "Buddy is a person".<br>
+<h2><span style="font-family: monospace;"><a
+ name="generalGetValue_and_generalUnify"></a>generalGetValue</span> and
+<span style="font-family: monospace;">generalUnify</span></h2>
+In the previous example, we have to bind <span
+ style="font-family: monospace;">Person</span> to "Hillary", before we
+call <span style="font-family: monospace;">personWithUnify(Person)</span>.
+We have to do this first step because <span
+ style="font-family: monospace;">personWithUnify</span> takes an
+argument of type <span style="font-family: monospace;">UnifyingVariable</span>.
+But life would be easier if we could just call <span
+ style="font-family: monospace;">personWithUnify("Hillary")</span>. To
+do this, we create separate general functions<span
+ style="font-family: monospace;"></span><span
+ style="font-family: monospace;"></span>:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def generalGetValue(value):<br>    if isinstance(value, UnifyingVariable):<br>        if not value._isBound:<br>            return value<br>        else:<br>            return value._value<br>    else:<br>        return value<br><br>def generalUnify(arg1, arg2):<br>    arg1Value = generalGetValue(arg1)<br>    arg2Value = generalGetValue(arg2)<br>    if isinstance(arg1Value, UnifyingVariable):<br>        for l1 in arg1Value.unify(arg2Value):<br>            yield False<br>    elif isinstance(arg2Value, UnifyingVariable):<br>        for l1 in arg2Value.unify(arg1Value):<br>            yield False<br>    else:<br>        # Arguments are "normal" types.<br>        if arg1Value == arg2Value:<br>            yield False<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>class Tutorial1<br>{<br>    static object generalGetValue(object value) {<br>        if (value is UnifyingVariable) {<br>            if (!((UnifyingVariable)value)._isBound)<br>                return value;<br>            else<br>                return ((UnifyingVariable)value)._value;<br>        }<br>        else<br>            return value;<br>    }<br><br>    static IEnumerable&lt;bool&gt; generalUnify(object arg1, object arg2)<br>    {<br>        object arg1Value = generalGetValue(arg1);<br>        object arg2Value = generalGetValue(arg2);<br>        if (arg1Value is UnifyingVariable) {<br>            foreach (bool l1 in <br>                 ((UnifyingVariable)arg1Value).unify(arg2Value))<br>                yield return false;<br>        }<br>        else if (arg2Value is UnifyingVariable) {<br>            foreach (bool l1 in <br>                 ((UnifyingVariable)arg2Value).unify(arg1Value))<br>                yield return false;<br>        }<br>        else {<br>            // Arguments are "normal" types.<br>            if (arg1Value.Equals(arg2Value))<br>                yield return false;<br>        }<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+In the <span style="font-family: monospace;">generalGetValue</span>
+function, if
+the argument is an unbound <span style="font-family: monospace;">UnifyingVariable</span>,
+then return it. (We'll see why shortly.). If the argument is a bound <span
+ style="font-family: monospace;">UnifyingVariable</span>, then return
+its <span style="font-family: monospace;">_value</span>.
+Otherwise, if the argument is some other type (such as
+a string), just return the argument.<br>
+<br>
+The <span style="font-family: monospace;">generalUnify</span>
+function takes two arguments which we try to unify. Note that we first
+call <span style="font-family: monospace;">generalGetValue</span> for
+each of
+the arguments. For example, if <span style="font-family: monospace;">arg1
+</span>is a <span style="font-family: monospace;">UnifyingArgument </span>which
+is bound to the string "Hillary", then <span
+ style="font-family: monospace;">arg1Value</span> is just the string
+"Hillary". If <span style="font-family: monospace;">arg1</span> is an
+unbound <span style="font-family: monospace;">UnifyingVariable</span>,
+then <span style="font-family: monospace;">generalGetValue</span> just
+returns it and we continue to treat it as a variable. This is why it <span
+ style="font-family: monospace;"></span>returns the argument
+itself
+(instead of null) if the argument is an unbound <span
+ style="font-family: monospace;">UnifyingVariable</span>.<br>
+<br>
+So in <span style="font-family: monospace;">generalUnify</span>, if
+either argument is an unbound <span style="font-family: monospace;">UnifyingVariable</span>,
+just call its
+<span style="font-family: monospace;">unify</span> to bind it to the
+other argument. Otherwise, if both arguments have "normal" types, or
+are bound to "normal" types (such
+as a string), then just check if they
+are equal.<br>
+<br>
+It's a little work to create these general functions, but now we
+can use them to make our code simpler:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def person(Person):<br>    for l1 in generalUnify(Person, "Chelsea"):<br>        yield False<br>    for l1 in generalUnify(Person, "Hillary"):<br>        yield False<br>    for l1 in generalUnify(Person, "Bill"):<br>        yield False<br><br>def main():<br>    print("Use generalUnify to check a person:")<br>    for l1 in person("Hillary"):<br>        print("Hillary is a person.")<br>    for l1 in person("Buddy"):<br>        # This won't print.<br>        print ("Buddy is a person.")<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>class Tutorial1<br>{<br>    static IEnumerable&lt;bool&gt; person(object Person) {<br>        foreach (bool l1 in generalUnify(Person, "Chelsea"))<br>            yield return false;<br>        foreach (bool l1 in generalUnify(Person, "Hillary"))<br>            yield return false;<br>        foreach (bool l1 in generalUnify(Person, "Bill"))<br>            yield return false;<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine<br>	     ("Use generalUnify to check a person:");<br>        foreach (bool l1 in person("Hillary"))<br>            Console.WriteLine("Hillary is a person.");<br>        foreach (bool l1 in person("Buddy"))<br>            // This won't print.<br>            Console.WriteLine("Buddy is a person.");<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+<span style="font-family: monospace;"></span>The function <span
+ style="font-family: monospace;">person </span>takes a general object
+instead of a <span style="font-family: monospace;">UnifyingVariable</span>,
+so it calls <span style="font-family: monospace;">generalUnify</span>.
+In the main function, as we wanted, we can simply call <span
+ style="font-family: monospace;">person("Hillary")</span> to check if
+"Hillary" is a person. We don't have to create an extra <span
+ style="font-family: monospace;">UnifyingVariable</span>. Isn't that
+better!<br>
+<h2><a name="The_meaning_of_unify"></a>The meaning of <span
+ style="font-family: monospace;">unify</span></h2>
+Because unify can either bind values or check values, it enforces a
+logical relation. This is why programming languages that use it (like
+Prolog) are called "logic languages." If you are inside a loop defined
+by a call to <span style="font-family: monospace;">person(Person)</span>,
+you can be sure that the loop will explore all the ways that <span
+ style="font-family: monospace;">Person</span> is a person. If <span
+ style="font-family: monospace;">Person</span> is unbound at the start
+of the loop, <span style="font-family: monospace;">person</span> will
+bind it to all known persons. Or if <span
+ style="font-family: monospace;">Person</span> is bound at the start of
+the loop, <span style="font-family: monospace;">person</span> will
+ensure that it matches one of the possible person values.<br>
+<br>
+Next, we will see an example of a function <span
+ style="font-family: monospace;">brother</span> that takes two
+arguments, <span style="font-family: monospace;">Person</span> and <span
+ style="font-family: monospace;">Brother</span>, but the meaning is the
+same: brother makes sure that the loop explores all possible ways that
+the arguments are logically related so that <span
+ style="font-family: monospace;">Brother</span> is the brother of <span
+ style="font-family: monospace;">Person</span>.<br>
+<h2><a name="Finding_relations"></a>Finding relations<br>
+</h2>
+Here is a function with two arguments called <span
+ style="font-family: monospace;">brother</span>:<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def brother(Person, Brother):    <br>    for l1 in generalUnify(Person, "Hillary"):<br>        for l2 in generalUnify(Brother, "Tony"):<br>            yield False<br>        for l2 in generalUnify(Brother, "Hugh"):<br>            yield False<br>    for l1 in generalUnify(Person, "Bill"):<br>        for l2 in generalUnify(Brother, "Roger"):<br>            yield False<br><br>def main():<br>    print("Find relations:")<br>    Brother = UnifyingVariable()<br>    for l1 in brother("Hillary", Brother):<br>        print("Hillary has brother " + <br>	  Brother._value + ".")<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>class Tutorial1<br>{<br>    static IEnumerable&lt;bool&gt; brother<br>	(object Person, object Brother) {<br>        foreach (bool l1 in generalUnify(Person, "Hillary")) {<br>            foreach (bool l2 in generalUnify(Brother, "Tony"))<br>                yield return false;<br>            foreach (bool l2 in generalUnify(Brother, "Hugh"))<br>                yield return false;<br>        }<br>        foreach (bool l1 in generalUnify(Person, "Bill")) {<br>            foreach (bool l2 in generalUnify(Brother, "Roger"))<br>                yield return false;<br>        }<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Find relations:");<br>        UnifyingVariable Brother = new UnifyingVariable();<br>        foreach (bool l1 in brother("Hillary", Brother))<br>            Console.WriteLine("Hillary has brother " +<br>                Brother._value + ".");<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+The <span style="font-family: monospace;">brother </span>function
+unifies <span style="font-family: monospace;">Person</span>
+and <span style="font-family: monospace;">Brother</span> with pairs
+that mean "Hillary" has brother "Tony", "Hillary" has brother "Hugh",
+and "Bill" has brother "Roger".<br>
+<br>
+The main function calls <span style="font-family: monospace;">brother</span>
+where the <span style="font-family: monospace;">Person</span> argument
+is "Hillary" and <span style="font-family: monospace;">Brother</span>
+is an unbound variable.&nbsp; <span style="font-family: monospace;">brother</span>
+binds <span style="font-family: monospace;">Brother</span> to each of
+the values that match when <span style="font-family: monospace;">Person</span>
+is "Hillary". (Since <span style="font-family: monospace;">brother</span>
+uses <span style="font-family: monospace;">generalUnify</span>,
+we can pass the string "Hillary" without first binding it to a <span
+ style="font-family: monospace;">UnifyingVariable</span>.) So, the main
+function prints:<br>
+<pre>Find relations:<br>Hillary has brother Tony.<br>Hillary has brother Hugh.<br></pre>
+Again, the logical meaning is that <span
+ style="font-family: monospace;">brother</span> loops with all
+matches where <span style="font-family: monospace;">Brother</span> is
+the brother of <span style="font-family: monospace;">Person</span>. In
+this way, <span style="font-family: monospace;">brother</span> is
+actually 4 different functions:<br>
+<ol>
+  <li>If <span style="font-family: monospace;">Person</span> and <span
+ style="font-family: monospace;">Brother</span> are unbound variables,
+loop where
+these are bound to each of the person/brother pairs.</li>
+  <li>If <span style="font-family: monospace;">Person</span> is bound,
+loop where <span style="font-family: monospace;">Brother</span> is
+bound to each brother of <span style="font-family: monospace;">Person</span>
+(as in the example above).<br>
+  </li>
+  <li>If <span style="font-family: monospace;">Brother</span> is
+bound, loop where <span style="font-family: monospace;">Person</span>
+is bound to each person who has brother <span
+ style="font-family: monospace;">Brother</span>.</li>
+  <li>If both are bound, loop once if <span
+ style="font-family: monospace;">Brother</span> is the brother of <span
+ style="font-family: monospace;">Person</span>. If not, then don't loop.</li>
+</ol>
+In this way, because unify does "double duty" on each argument, with 2
+arguments we really get 4 functions, with 3 arguments we really get 8
+functions, etc.<br>
+<h2><a name="Joining_functions"></a>Joining functions</h2>
+We have a function for <span style="font-family: monospace;">brother</span>.
+If we define a function for <span style="font-family: monospace;">parent</span>,
+then we can combine them to infer whether a person has
+an uncle. (A person has an uncle if the person has a parent and that
+parent has a brother.)<br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def brother(Person, Brother):    <br>    for l1 in generalUnify(Person, "Hillary"):<br>        for l2 in generalUnify(Brother, "Tony"):<br>            yield False<br>        for l2 in generalUnify(Brother, "Hugh"):<br>            yield False<br>    for l1 in generalUnify(Person, "Bill"):<br>        for l2 in generalUnify(Brother, "Roger"):<br>            yield False<br><br>def parent(Person, Parent):<br>    for l1 in generalUnify(Person, "Chelsea"):<br>        for l2 in generalUnify(Parent, "Hillary"):<br>            yield False<br>    for l1 in generalUnify(Person, "Chelsea"):<br>        for l2 in generalUnify(Parent, "Bill"):<br>            yield False<br><br>def uncle(Person, Uncle):<br>    Parent = UnifyingVariable()<br>    for l1 in parent(Person, Parent):<br>        for l2 in brother(Parent, Uncle):<br>            yield False<br><br>def main():<br>    print("Joining functions:")<br>    Person = UnifyingVariable()<br>    Uncle = UnifyingVariable()<br>    for l1 in uncle(Person, Uncle):<br>        print(Person._value + <br>	  " has uncle " + Uncle._value + ".")<br><br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>using System;<br>using System.Collections.Generic;<br>class Tutorial1<br>{<br>    static IEnumerable&lt;bool&gt; brother<br>	(object Person, object Brother) {<br>        foreach (bool l1 in generalUnify(Person, "Hillary")) {<br>            foreach (bool l2 in generalUnify(Brother, "Tony"))<br>                yield return false;<br>            foreach (bool l2 in generalUnify(Brother, "Hugh"))<br>                yield return false;<br>        }<br>        foreach (bool l1 in generalUnify(Person, "Bill")) {<br>            foreach (bool l2 in generalUnify(Brother, "Roger"))<br>                yield return false;<br>        }<br>    }<br><br>    static IEnumerable&lt;bool&gt; parent<br>	(object Person, object Parent) {<br>        foreach (bool l1 in generalUnify(Person, "Chelsea")) {<br>            foreach (bool l2 in generalUnify(Parent, "Hillary"))<br>                yield return false;<br>        }<br>        foreach (bool l1 in generalUnify(Person, "Chelsea")) {<br>            foreach (bool l2 in generalUnify(Parent, "Bill"))<br>                yield return false;<br>        }<br>    }<br><br>    static IEnumerable&lt;bool&gt; uncle<br>	(object Person, object Uncle) {<br>        UnifyingVariable Parent = new UnifyingVariable();<br>        foreach (bool l1 in parent(Person, Parent)) {<br>            foreach (bool l2 in brother(Parent, Uncle))<br>                yield return false;<br>        }<br>    }<br><br>    static void Main(string[] args) {<br>        Console.WriteLine("Joining functions:");<br>        UnifyingVariable Person = new UnifyingVariable();<br>        UnifyingVariable Uncle = new UnifyingVariable();<br>        foreach (bool l1 in uncle(Person, Uncle))<br>            Console.WriteLine(Person._value +<br>                " has uncle " + Uncle._value + ".");<br>    }<br>}<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+(The code for <span style="font-family: monospace;">brother</span> is
+the same as before.)&nbsp; We add function <span
+ style="font-family: monospace;">parent</span> which unifies <span
+ style="font-family: monospace;">Person</span> and <span
+ style="font-family: monospace;">Parent</span> with the following
+pairs: ("Chelsea",
+"Hillary")
+and ("Chelsea",
+"Bill"). The
+function <span style="font-family: monospace;">uncle(Person, Uncle)</span>
+has a local variable <span style="font-family: monospace;">Parent</span>
+and unifies with <span style="font-family: monospace;">parent(Person,
+Parent)</span>. Then, for each parent of the <span
+ style="font-family: monospace;">Person</span> it unifies with <span
+ style="font-family: monospace;">brother(Parent, Uncle)</span> to match
+the uncle of <span style="font-family: monospace;">Person</span>. When
+the main function calls <span style="font-family: monospace;">uncle</span>,
+<span style="font-family: monospace;">Person</span> and <span
+ style="font-family: monospace;">Uncle</span> are unbound, so it prints
+all person/uncle pairs:<br>
+<pre>Joining functions:<br>Chelsea has uncle Tony<br>Chelsea has uncle Hugh<br>Chelsea has uncle Roger<br></pre>
+The "uncle" function is a classic example of inference using Prolog <a
+ href="#footnote2">[2]</a>. We only have data for who is a parent and
+who is a brother, and yet we can infer who is an uncle. Again, because
+of unify<span style="font-family: monospace;"></span>, <span
+ style="font-family: monospace;">uncle</span> is really 4 different
+functions and we can use it to find all person/uncle pairs, to find the
+uncles of a person, to find the persons who have a certain uncle, or to
+check whether someone is the uncle of another person.<br>
+<br>
+In <a href="tutorial2.html">Tutorial 2</a>, we improve <span
+ style="font-family: monospace;">UnifyingVariable</span> to create the
+full <span style="font-family: monospace;">Variable </span>class
+which Yield
+Prolog actually uses.<br>
+<br>
+<hr style="width: 100%; height: 2px;"><span
+ style="font-family: monospace;"></span><a name="footnote1"></a>1. The
+equivalent Prolog code for this example is:<br>
+<pre>personWithUnify(Person) :-<br>  Person = 'Chelsea' ; Person = 'Hillary' ; Person = 'Bill'.<br>:- personWithUnify(Person), write(Person), nl.<br></pre>
+Yes, the Prolog code is much more compact, but wait until you see the
+speed and convenience of using Prolog functionality right inside your
+program.<br>
+<br>
+<a name="footnote2"></a>2. The equivalent Prolog code for this example
+is:<br>
+<pre>brother(Person, Brother) :-<br>  Person = 'Hillary', (Brother = 'Tony' ; Brother = 'Hugh') ;<br>  Person = 'Bill', Brother = 'Roger'.<br>parent(Person, Parent) :-<br>  Person = 'Chelsea', Parent = 'Hillary' ;<br>  Person = 'Chelsea', Parent = 'Bill'.<br>uncle(Person, Uncle) :-<br>  parent(Person, Parent),<br>  brother(Parent, Uncle).<br>:- uncle(Person, Uncle), write(hasUncle(Person, Uncle)), nl.<br></pre>
+Chaining together parent and brother is also an example of a join in a
+relational database. Here is the SQL code:<br>
+<pre>SELECT parent.Person AS Person, brother.Brother AS Uncle<br>FROM parent JOIN brother ON parent.Parent = brother.Person<br></pre>
+But SQL doesn't use unify. This query returns all Person/Uncle pairs.
+But if we want to find who has a particular uncle, we have to write a
+new query:<br>
+<pre>SELECT parent.Person AS Person, brother.Brother AS Uncle<br>FROM parent JOIN brother ON parent.Parent = brother.Person<br>WHERE brother.Brother = 'Hugh'<br></pre>
+In Yield Prolog, we can use the same <span
+ style="font-family: monospace;">uncle</span> function and just change
+the main function to: <br>
+<br>
+<table style="text-align: left;" border="1" cellpadding="2"
+ cellspacing="0">
+  <tbody>
+    <tr>
+      <td style="vertical-align: top;">
+      <pre>def main():<br>    Person = UnifyingVariable()<br>    for l1 in uncle(Person, "Hugh"):<br>        print(Person._value + <br>	  " has uncle Hugh."<br></pre>
+      </td>
+      <td style="vertical-align: top;">
+      <pre>    static void Main(string[] args) {<br>        UnifyingVariable Person = new UnifyingVariable();<br>        foreach (bool l1 in uncle(Person, "Hugh"))<br>            Console.WriteLine(Person._value +<br>                " has uncle Hugh.");<br>    }<br></pre>
+      </td>
+    </tr>
+  </tbody>
+</table>
+<br>
+As expected, this prints:<br>
+<pre>Chelsea has uncle Hugh<br></pre>
+<br>
+<br>
+</body>
+</html>
