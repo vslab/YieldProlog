@@ -114,12 +114,10 @@ namespace YieldProlog
         public IEnumerable<bool> unify(object arg)
         {
             arg = YP.getValue(arg);
-            if (arg is Atom)
-                return Equals(arg) ? YP.succeed() : YP.fail();
-            else if (arg is Variable)
+            if (arg is Variable)
                 return ((Variable)arg).unify(this);
             else
-                return YP.fail();
+                return Equals(arg) ? YP.succeed() : YP.fail();
         }
 
         public void addUniqueVariables(List<Variable> variableSet)
@@ -154,7 +152,7 @@ namespace YieldProlog
                 // Otherwise, ignore _declaringClass and do a normal string compare on the _name.
                 return _name == ((Atom)obj)._name;
             }
-            return false;
+            return _name.Equals(obj);
         }
 
         public override string ToString()
