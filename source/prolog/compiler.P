@@ -776,7 +776,7 @@ binaryFunction(max, 'YP.max') :- !.
 :- pred(convertFunctionCSharp(::(univ, in)) is det).
 convertFunctionCSharp(getDeclaringClass) :-
   % Emit an inner class whose name we know so we can find the declaring class.
-  write('public class YPInnerClass {}'), nl,
+  write('public class YPInnerClass { }'), nl,
   write('public static Type getDeclaringClass() { return typeof(YPInnerClass).DeclaringType; }'), 
   nl, nl, !.
 convertFunctionCSharp(function(ReturnType, Name, ArgList, Body)) :-
@@ -786,7 +786,8 @@ convertFunctionCSharp(function(ReturnType, Name, ArgList, Body)) :-
   write(Name),
   write('('),
   convertArgListCSharp(ArgList),
-  write(') {'), nl,
+  write(')'), nl,
+  write('{'), nl,
   Level = 1,
   convertStatementListCSharp(Body, Level),
   write('}'), nl, nl, !.
@@ -839,13 +840,14 @@ convertStatementListCSharp([returnfalse|RestStatements], Level) :-
     write('return false;'), nl,
     convertStatementListCSharp(RestStatements, Level), !.
 convertStatementListCSharp([label(Name)|RestStatements], Level) :-
-    convertIndentationCSharp(Level),
+    PrevLevel is Level - 1,
+    convertIndentationCSharp(PrevLevel),
     write(Name),
     write(':'), nl,
     (RestStatements == [] ->
       % No more statements, so we need a target for the label.
       convertIndentationCSharp(Level),
-      write('{}'), nl
+      write('{ }'), nl
      ; true),
     convertStatementListCSharp(RestStatements, Level), !.
 convertStatementListCSharp([breakBlock(Name)|RestStatements], Level) :-
@@ -886,7 +888,9 @@ convertStatementListCSharp([if(Expression, Body)|RestStatements], Level) :-
     convertIndentationCSharp(Level),
     write('if ('),
     convertExpressionCSharp(Expression),
-    write(') {'), nl,
+    write(')'), nl,
+    convertIndentationCSharp(Level),
+    write('{'), nl,
     NextLevel is Level + 1,
     convertStatementListCSharp(Body, NextLevel),
     convertIndentationCSharp(Level),
@@ -898,7 +902,9 @@ convertStatementListCSharp([foreach(Expression, Body)|RestStatements], Level) :-
     write(Level),
     write(' in '),
     convertExpressionCSharp(Expression),
-    write(') {'), nl,
+    write(')'), nl,
+    convertIndentationCSharp(Level),
+    write('{'), nl,
     NextLevel is Level + 1,
     convertStatementListCSharp(Body, NextLevel),
     convertIndentationCSharp(Level),
@@ -913,7 +919,7 @@ convertStatementListCSharp([throw(Expression)|RestStatements], Level) :-
 
 :- pred(convertIndentationCSharp(::(univ, in)) is det).
 convertIndentationCSharp(Level) :-
-  N is Level * 2,
+  N is Level * 4,
   repeatWrite(' ', N), !.
 
 :- pred(convertArgListCSharp(::(univ, in)) is det).
@@ -964,9 +970,9 @@ convertExpressionCSharp(and(X, Y)) :-
   convertExpressionCSharp(Y),
   write(')'), !.
 convertExpressionCSharp(objectArray(ArgList)) :-
-  write('new object[] {'),
+  write('new object[] { '),
   convertArgListCSharp(ArgList),
-  write('}'), !.
+  write(' }'), !.
 convertExpressionCSharp(object(X)) :-
   atom(X),
   write('"'),

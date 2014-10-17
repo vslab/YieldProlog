@@ -4350,7 +4350,7 @@ namespace Temporary {
             {
                 foreach (bool l2 in YP.unify(arg1, Atom.a("getDeclaringClass")))
                 {
-                    YP.write(Atom.a("public class YPInnerClass {}"));
+                    YP.write(Atom.a("public class YPInnerClass { }"));
                     YP.nl();
                     YP.write(Atom.a("public static Type getDeclaringClass() { return typeof(YPInnerClass).DeclaringType; }"));
                     YP.nl();
@@ -4372,7 +4372,9 @@ namespace Temporary {
                     YP.write(Name);
                     YP.write(Atom.a("("));
                     convertArgListCSharp(ArgList);
-                    YP.write(Atom.a(") {"));
+                    YP.write(Atom.a(")"));
+                    YP.nl();
+                    YP.write(Atom.a("{"));
                     YP.nl();
                     foreach (bool l3 in YP.unify(Level, 1))
                     {
@@ -4517,25 +4519,29 @@ namespace Temporary {
             {
                 Variable Name = new Variable();
                 Variable RestStatements = new Variable();
+                Variable PrevLevel = new Variable();
                 foreach (bool l2 in YP.unify(arg1, new ListPair(new Functor1("label", Name), RestStatements)))
                 {
-                    convertIndentationCSharp(Level);
-                    YP.write(Name);
-                    YP.write(Atom.a(":"));
-                    YP.nl();
-                    if (YP.termEqual(RestStatements, Atom.NIL))
+                    foreach (bool l3 in YP.unify(PrevLevel, YP.subtract(Level, 1)))
                     {
-                        convertIndentationCSharp(Level);
-                        YP.write(Atom.a("{}"));
+                        convertIndentationCSharp(PrevLevel);
+                        YP.write(Name);
+                        YP.write(Atom.a(":"));
                         YP.nl();
+                        if (YP.termEqual(RestStatements, Atom.NIL))
+                        {
+                            convertIndentationCSharp(Level);
+                            YP.write(Atom.a("{ }"));
+                            YP.nl();
+                            convertStatementListCSharp(RestStatements, Level);
+                            return;
+                            goto cutIf1;
+                        }
                         convertStatementListCSharp(RestStatements, Level);
                         return;
-                        goto cutIf1;
+                    cutIf1:
+                        { }
                     }
-                    convertStatementListCSharp(RestStatements, Level);
-                    return;
-                cutIf1:
-                    { }
                 }
             }
             {
@@ -4628,7 +4634,10 @@ namespace Temporary {
                     convertIndentationCSharp(Level);
                     YP.write(Atom.a("if ("));
                     convertExpressionCSharp(Expression);
-                    YP.write(Atom.a(") {"));
+                    YP.write(Atom.a(")"));
+                    YP.nl();
+                    convertIndentationCSharp(Level);
+                    YP.write(Atom.a("{"));
                     YP.nl();
                     foreach (bool l3 in YP.unify(NextLevel, YP.add(Level, 1)))
                     {
@@ -4653,7 +4662,10 @@ namespace Temporary {
                     YP.write(Level);
                     YP.write(Atom.a(" in "));
                     convertExpressionCSharp(Expression);
-                    YP.write(Atom.a(") {"));
+                    YP.write(Atom.a(")"));
+                    YP.nl();
+                    convertIndentationCSharp(Level);
+                    YP.write(Atom.a("{"));
                     YP.nl();
                     foreach (bool l3 in YP.unify(NextLevel, YP.add(Level, 1)))
                     {
@@ -4686,7 +4698,7 @@ namespace Temporary {
         {
             {
                 Variable N = new Variable();
-                foreach (bool l2 in YP.unify(N, YP.multiply(Level, 2)))
+                foreach (bool l2 in YP.unify(N, YP.multiply(Level, 4)))
                 {
                     repeatWrite(Atom.a(" "), N);
                     return;
@@ -4826,9 +4838,9 @@ namespace Temporary {
                 Variable ArgList = new Variable();
                 foreach (bool l2 in YP.unify(arg1, new Functor1("objectArray", ArgList)))
                 {
-                    YP.write(Atom.a("new object[] {"));
+                    YP.write(Atom.a("new object[] { "));
                     convertArgListCSharp(ArgList);
-                    YP.write(Atom.a("}"));
+                    YP.write(Atom.a(" }"));
                     return;
                 }
             }
